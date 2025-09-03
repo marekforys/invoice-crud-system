@@ -27,12 +27,19 @@ public class InMemoryInvoiceRepository implements InvoiceRepository {
 
     @Override
     public List<Invoice> search(String query) {
-        if (query == null || query.isBlank()) return findAll();
-        final String q = query.toLowerCase();
+        if (query == null) {
+            return new ArrayList<>();
+        }
+        if (query.isBlank()) {
+            return findAll();
+        }
+        
+        final String q = query.trim().toLowerCase();
         return store.values().stream()
                 .filter(inv -> inv.getCustomerName().toLowerCase().contains(q)
                         || inv.getItems().stream().anyMatch(i ->
-                        (i.getDescription() != null && i.getDescription().toLowerCase().contains(q))
+                        i.getDescription() != null && 
+                        i.getDescription().toLowerCase().contains(q)
                 ))
                 .collect(Collectors.toList());
     }
