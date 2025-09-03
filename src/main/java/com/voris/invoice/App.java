@@ -3,6 +3,7 @@ package com.voris.invoice;
 import com.voris.invoice.model.Invoice;
 import com.voris.invoice.model.LineItem;
 import com.voris.invoice.repo.InMemoryInvoiceRepository;
+import com.voris.invoice.repo.JdbcInvoiceRepository;
 import com.voris.invoice.service.InvoiceService;
 
 import java.math.BigDecimal;
@@ -14,7 +15,8 @@ public class App {
     private final InvoiceService service;
 
     public App() {
-        this.service = new InvoiceService(new InMemoryInvoiceRepository());
+        String dbPath = System.getProperty("invoice.db", "jdbc:sqlite:invoice.db");
+        this.service = new InvoiceService(new JdbcInvoiceRepository(dbPath));
     }
 
     public static void main(String[] args) {

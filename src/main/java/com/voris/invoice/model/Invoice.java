@@ -22,6 +22,22 @@ public class Invoice {
         this.date = LocalDate.now();
     }
 
+    // Persistence constructor
+    public Invoice(String id, String customerName, LocalDate date) {
+        if (id == null || id.trim().isEmpty()) {
+            throw new IllegalArgumentException("Id cannot be null or empty");
+        }
+        if (customerName == null || customerName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Customer name cannot be null or empty");
+        }
+        if (date == null) {
+            throw new IllegalArgumentException("Date cannot be null");
+        }
+        this.id = id.trim();
+        this.customerName = customerName.trim();
+        this.date = date;
+    }
+
     public String getId() {
         return id;
     }
