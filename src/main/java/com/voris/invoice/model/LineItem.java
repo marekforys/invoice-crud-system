@@ -11,6 +11,13 @@ public class LineItem {
     }
 
     public LineItem(String description, BigDecimal price) {
+        if (description == null || description.trim().isEmpty()) {
+            throw new IllegalArgumentException("Description cannot be null or empty");
+        }
+        if (price == null) {
+            throw new IllegalArgumentException("Price cannot be null");
+        }
+        // Negative prices are allowed by tests (e.g., discounts)
         this.description = description;
         this.price = price;
     }
@@ -36,12 +43,13 @@ public class LineItem {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         LineItem lineItem = (LineItem) o;
-        return Objects.equals(description, lineItem.description) && Objects.equals(price, lineItem.price);
+        return Objects.equals(description, lineItem.description) && 
+               (price.compareTo(lineItem.price) == 0);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(description, price);
+        return Objects.hash(description, price.stripTrailingZeros());
     }
 
     @Override

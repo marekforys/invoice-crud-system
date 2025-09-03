@@ -29,11 +29,8 @@ java {
     }
 }
 
-version = '1.0.0'
-
 application {
     mainClass = 'com.voris.invoice.App'
-    applicationDefaultJvmArgs = ['-Dfile.encoding=UTF-8']
 }
 
 run {
@@ -46,19 +43,41 @@ repositories {
 }
 
 dependencies {
-    // No external dependencies for this simple console app
+    // Test dependencies
+    testImplementation platform('org.junit:junit-bom:5.9.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.assertj:assertj-core:3.24.2'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.5.0'
 }
 
-// Optional: make the jar executable with Main-Class manifest
-jar {
-    manifest {
-        attributes(
-                'Main-Class': 'com.voris.invoice.App'
-        )
+test {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
     }
 }
 
-// Convenience tasks
+jar {
+    manifest {
+        attributes 'Main-Class': 'com.voris.invoice.App'
+    }
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    options.compilerArgs << '-parameters'
+}
+
+tasks.withType(Test).configureEach {
+    systemProperty 'file.encoding', 'UTF-8'
+}
+
+wrapper {
+    gradleVersion = '8.0.2'
+    distributionType = Wrapper.DistributionType.ALL
 }
