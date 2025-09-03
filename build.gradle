@@ -1,0 +1,64 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'idea'
+}
+
+tasks.withType(JavaCompile) {
+    options.compilerArgs << '-Xlint:unchecked'
+    options.deprecation = true
+}
+
+tasks.withType(Test) {
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
+    }
+}
+
+task debugRun(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.voris.invoice.App'
+    standardInput = System.in
+    debug = true
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+version = '1.0.0'
+
+application {
+    mainClass = 'com.voris.invoice.App'
+    applicationDefaultJvmArgs = ['-Dfile.encoding=UTF-8']
+}
+
+run {
+    standardInput = System.in
+    enableAssertions = true
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // No external dependencies for this simple console app
+}
+
+// Optional: make the jar executable with Main-Class manifest
+jar {
+    manifest {
+        attributes(
+                'Main-Class': 'com.voris.invoice.App'
+        )
+    }
+}
+
+// Convenience tasks
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
