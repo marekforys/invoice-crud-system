@@ -16,12 +16,16 @@ public class InvoiceService {
     }
 
     public Invoice createInvoice(String customerName, List<LineItem> items) {
-        if (customerName == null || customerName.isBlank()) {
-            throw new IllegalArgumentException("Customer name is required");
+        if (customerName == null || customerName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Customer name is required and cannot be blank");
         }
-        Invoice invoice = new Invoice(customerName);
+        Invoice invoice = new Invoice(customerName.trim());
         if (items != null) {
-            items.forEach(invoice::addItem);
+            items.forEach(item -> {
+                if (item != null) {
+                    invoice.addItem(item);
+                }
+            });
         }
         return repository.save(invoice);
     }
@@ -39,9 +43,20 @@ public class InvoiceService {
     }
 
     public Invoice addLineItem(String invoiceId, String description, BigDecimal price) {
+        if (invoiceId == null || invoiceId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invoice ID cannot be null or empty");
+        }
+        if (description == null || description.trim().isEmpty()) {
+            throw new IllegalArgumentException("Description cannot be null or empty");
+        }
+        if (price == null) {
+            throw new IllegalArgumentException("Price cannot be null");
+        }
+        
         Invoice invoice = repository.findById(invoiceId)
-                .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + invoiceId));
-        invoice.addItem(new LineItem(description, price));
+                .orElseThrow(() -> new IllegalArgumentException("Invoice not found with ID: " + invoiceId));
+                
+        invoice.addItem(new LineItem(description.trim(), price));
         return repository.save(invoice);
     }
 }
