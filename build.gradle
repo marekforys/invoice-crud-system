@@ -56,6 +56,38 @@ test {
     testLogging {
         events 'passed', 'skipped', 'failed'
         showStandardStreams = true
+        showCauses = true
+        showExceptions = true
+        showStackTraces = true
+        exceptionFormat = 'full'
+        displayGranularity = 0  // Show individual test methods
+        minGranularity = 0
+        maxGranularity = 0
+    }
+    
+    // Add detailed test summary
+    afterSuite { desc, result ->
+        if (!desc.parent) {
+            println "\n" + "="*80
+            println "TEST EXECUTION SUMMARY"
+            println "="*80
+            println "Total tests executed: ${result.testCount}"
+            println "✅ Passed: ${result.successfulTestCount}"
+            println "❌ Failed: ${result.failedTestCount}"
+            println "⏭️  Skipped: ${result.skippedTestCount}"
+            println "⏱️  Duration: ${result.endTime - result.startTime}ms"
+            println "="*80
+            
+            if (result.failedTestCount > 0) {
+                println "\n❌ FAILED TESTS:"
+                result.failures.each { failure ->
+                    println "  • ${failure.testIdentifier.displayName}"
+                    println "    Reason: ${failure.message}"
+                }
+            } else {
+                println "\n🎉 All tests passed successfully!"
+            }
+        }
     }
 }
 
