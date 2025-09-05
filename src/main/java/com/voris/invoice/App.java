@@ -22,7 +22,11 @@ public class App {
     }
 
     public static void main(String[] args) {
-        new App().run();
+        if (args.length > 0 && args[0].equalsIgnoreCase("server")) {
+            ApiServer.start();
+        } else {
+            new App().run();
+        }
     }
 
     private void run() {

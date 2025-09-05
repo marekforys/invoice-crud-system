@@ -38,6 +38,12 @@ run {
     enableAssertions = true
 }
 
+tasks.register('runServer', JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.voris.invoice.App'
+    args 'server'
+}
+
 repositories {
     mavenCentral()
 }
@@ -49,6 +55,8 @@ dependencies {
     testImplementation 'org.assertj:assertj-core:3.24.2'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.5.0'
     implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
+    implementation 'com.sparkjava:spark-core:2.9.4'
+    implementation 'com.google.code.gson:gson:2.11.0'
 }
 
 test {
