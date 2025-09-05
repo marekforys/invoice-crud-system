@@ -234,10 +234,10 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
                     ps.executeUpdate();
                 }
 
-                // Return updated invoice
+                // Commit before reloading so subsequent read sees committed data
+                conn.commit();
                 Invoice updated = findById(invoiceId)
                         .orElseThrow(() -> new IllegalStateException("Invoice disappeared after update: " + invoiceId));
-                conn.commit();
                 return updated;
             } catch (Exception e) {
                 conn.rollback();

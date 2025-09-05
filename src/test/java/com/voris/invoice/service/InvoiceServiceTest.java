@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -149,5 +150,34 @@ class InvoiceServiceTest {
         // Act & Assert
         assertThrows(IllegalArgumentException.class, 
             () -> service.addLineItem("non-existing-id", "Test", BigDecimal.ONE));
+    }
+
+    @Test
+    void payInvoice_WithValidData_ShouldMarkPaid() {
+        // Arrange
+        Invoice invoice = service.createInvoice("Payable", null);
+        LocalDate date = LocalDate.now();
+
+        // Act
+        Invoice updated = service.payInvoice(invoice.getId(), new BigDecimal("99.99"), "BANK_TRANSFER", date);
+
+        // Assert
+        assertTrue(updated.isPaid());
+        assertEquals(0, new BigDecimal("99.99").compareTo(updated.getAmountPaid()));
+        assertEquals("BANK_TRANSFER", updated.getPaymentMethod());
+        assertEquals(date, updated.getPaymentDate());
+    }
+
+    @Test
+    void payInvoice_WithInvalidInputs_ShouldThrow() {
+        // Arrange
+        Invoice invoice = service.createInvoice("Payable", null);
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> service.payInvoice(null, BigDecimal.TEN, "CASH", null));
+        assertThrows(IllegalArgumentException.class, () -> service.payInvoice(" ", BigDecimal.TEN, "CASH", null));
+        assertThrows(IllegalArgumentException.class, () -> service.payInvoice(invoice.getId(), null, "CASH", null));
+        assertThrows(IllegalArgumentException.class, () -> service.payInvoice(invoice.getId(), new BigDecimal("-1"), "CASH", null));
+        assertThrows(IllegalArgumentException.class, () -> service.payInvoice(invoice.getId(), BigDecimal.TEN, " ", null));
     }
 }

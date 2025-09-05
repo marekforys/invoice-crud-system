@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -121,5 +122,21 @@ class InMemoryInvoiceRepositoryTest {
         
         // Assert
         assertTrue(results.isEmpty());
+    }
+
+    @Test
+    void markPaid_ShouldPersistPaymentFields() {
+        // Arrange
+        Invoice saved = repository.save(testInvoice);
+        LocalDate date = LocalDate.now();
+
+        // Act
+        Invoice updated = repository.markPaid(saved.getId(), new BigDecimal("25.50"), "CASH", date);
+
+        // Assert
+        assertTrue(updated.isPaid());
+        assertEquals(0, new BigDecimal("25.50").compareTo(updated.getAmountPaid()));
+        assertEquals("CASH", updated.getPaymentMethod());
+        assertEquals(date, updated.getPaymentDate());
     }
 }

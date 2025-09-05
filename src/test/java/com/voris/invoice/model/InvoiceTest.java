@@ -4,7 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -124,5 +124,36 @@ class InvoiceTest {
         // Assert
         assertTrue(result.contains("Invoice{"));
         assertTrue(result.contains("customerName='" + customerName + "'"));
+    }
+
+    @Test
+    void markPaid_WithValidData_SetsPaymentFields() {
+        // Act
+        LocalDate date = LocalDate.now();
+        invoice.markPaid(new BigDecimal("100.00"), "CARD", date);
+
+        // Assert
+        assertTrue(invoice.isPaid());
+        assertEquals(0, new BigDecimal("100.00").compareTo(invoice.getAmountPaid()));
+        assertEquals("CARD", invoice.getPaymentMethod());
+        assertEquals(date, invoice.getPaymentDate());
+    }
+
+    @Test
+    void markPaid_WithNullAmount_Throws() {
+        assertThrows(IllegalArgumentException.class,
+                () -> invoice.markPaid(null, "CARD", LocalDate.now()));
+    }
+
+    @Test
+    void markPaid_WithNegativeAmount_Throws() {
+        assertThrows(IllegalArgumentException.class,
+                () -> invoice.markPaid(new BigDecimal("-1"), "CARD", LocalDate.now()));
+    }
+
+    @Test
+    void markPaid_WithBlankMethod_Throws() {
+        assertThrows(IllegalArgumentException.class,
+                () -> invoice.markPaid(new BigDecimal("10"), " ", LocalDate.now()));
     }
 }
