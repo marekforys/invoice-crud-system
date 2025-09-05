@@ -12,6 +12,10 @@ public class Invoice {
     private String customerName;
     private LocalDate date;
     private final List<LineItem> items = new ArrayList<>();
+    private boolean paid;
+    private LocalDate paymentDate;
+    private BigDecimal amountPaid;
+    private String paymentMethod;
 
     public Invoice(String customerName) {
         if (customerName == null || customerName.trim().isEmpty()) {
@@ -77,6 +81,38 @@ public class Invoice {
                 .map(LineItem::getPrice)
                 .filter(p -> p != null)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public boolean isPaid() {
+        return paid;
+    }
+
+    public LocalDate getPaymentDate() {
+        return paymentDate;
+    }
+
+    public BigDecimal getAmountPaid() {
+        return amountPaid;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void markPaid(BigDecimal amount, String method, LocalDate when) {
+        if (amount == null) {
+            throw new IllegalArgumentException("Amount cannot be null");
+        }
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Amount cannot be negative");
+        }
+        if (method == null || method.trim().isEmpty()) {
+            throw new IllegalArgumentException("Payment method cannot be null or empty");
+        }
+        this.paid = true;
+        this.amountPaid = amount;
+        this.paymentMethod = method.trim();
+        this.paymentDate = when == null ? LocalDate.now() : when;
     }
 
     @Override

@@ -5,6 +5,7 @@ import com.voris.invoice.model.LineItem;
 import com.voris.invoice.repo.InvoiceRepository;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -58,5 +59,21 @@ public class InvoiceService {
                 
         invoice.addItem(new LineItem(description.trim(), price));
         return repository.save(invoice);
+    }
+
+    public Invoice payInvoice(String invoiceId, BigDecimal amount, String method, LocalDate date) {
+        if (invoiceId == null || invoiceId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invoice ID cannot be null or empty");
+        }
+        if (amount == null) {
+            throw new IllegalArgumentException("Amount cannot be null");
+        }
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Amount cannot be negative");
+        }
+        if (method == null || method.trim().isEmpty()) {
+            throw new IllegalArgumentException("Payment method cannot be null or empty");
+        }
+        return repository.markPaid(invoiceId.trim(), amount, method.trim(), date);
     }
 }
