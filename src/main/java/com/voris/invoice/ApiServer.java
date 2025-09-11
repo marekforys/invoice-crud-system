@@ -135,6 +135,27 @@ public class ApiServer {
 			}
 		});
 
+		// Replace all items for an invoice (supports add/edit/delete in one request)
+		put("/invoices/:id/items", (req, res) -> {
+			res.type("application/json");
+			String id = req.params(":id");
+			String contentType = req.contentType() == null ? "" : req.contentType().toLowerCase();
+			List<LineItem> items;
+			if (contentType.contains("application/json")) {
+				UpdateItemsBody body = gson.fromJson(req.body(), UpdateItemsBody.class);
+				items = body == null ? List.of() : (body.items == null ? List.of() : body.items);
+			} else {
+				items = List.of();
+			}
+			try {
+				Invoice updated = service.updateLineItems(id, items);
+				return gson.toJson(toDto(updated));
+			} catch (IllegalArgumentException e) {
+				res.status(400);
+				return gson.toJson(Map.of("error", e.getMessage()));
+			}
+		});
+
 		post("/invoices/:id/pay", (req, res) -> {
 			res.type("application/json");
 			String id = req.params(":id");
@@ -177,7 +198,7 @@ public class ApiServer {
 	private static void enableCORS(String origin) {
 		options("/*", (request, response) -> {
 			response.header("Access-Control-Allow-Origin", origin);
-			response.header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+			response.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
 			response.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
 			response.status(200);
 			return "OK";
@@ -199,6 +220,7 @@ public class ApiServer {
 		dto.paymentDate = inv.getPaymentDate() == null ? null : inv.getPaymentDate().toString();
 		dto.amountPaid = inv.getAmountPaid() == null ? null : inv.getAmountPaid().toPlainString();
 		dto.paymentMethod = inv.getPaymentMethod();
+		dto.items = inv.getItems();
 		return dto;
 	}
 
@@ -211,6 +233,7 @@ public class ApiServer {
 		String paymentDate;
 		String amountPaid;
 		String paymentMethod;
+		List<LineItem> items;
 	}
 
 	private static class CreateInvoiceBody {
@@ -222,6 +245,10 @@ public class ApiServer {
 		BigDecimal amount;
 		String method;
 		String date; // ISO yyyy-MM-dd
+	}
+
+	private static class UpdateItemsBody {
+		List<LineItem> items;
 	}
 }
 

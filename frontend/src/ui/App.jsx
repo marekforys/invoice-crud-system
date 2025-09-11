@@ -12,6 +12,8 @@ export default function App() {
   const [newItemPrice, setNewItemPrice] = useState('')
   const [newItems, setNewItems] = useState([])
   const [rowItems, setRowItems] = useState({}) // { [invoiceId]: { desc, price } }
+  const [detailsOpen, setDetailsOpen] = useState(null) // invoice or null
+  const [detailsItems, setDetailsItems] = useState([])
 
   async function fetchInvoices() {
     setLoading(true)
@@ -30,6 +32,52 @@ export default function App() {
   useEffect(() => {
     fetchInvoices()
   }, [])
+
+  function openDetails(inv) {
+    setDetailsOpen(inv)
+    setDetailsItems((inv.items || []).map(it => ({ description: it.description || '', price: it.price ?? '' })))
+  }
+
+  function closeDetails() {
+    setDetailsOpen(null)
+    setDetailsItems([])
+  }
+
+  function updateDetailsItem(index, field, value) {
+    setDetailsItems(items => items.map((it, i) => i === index ? { ...it, [field]: value } : it))
+  }
+
+  function addDetailsItem() {
+    setDetailsItems(items => [...items, { description: '', price: '' }])
+  }
+
+  function removeDetailsItem(index) {
+    setDetailsItems(items => items.filter((_, i) => i !== index))
+  }
+
+  async function saveDetails() {
+    if (!detailsOpen) return
+    const payloadItems = []
+    for (const it of detailsItems) {
+      const desc = String(it.description || '').trim()
+      const priceNum = parseFloat(String(it.price).replace(',', '.'))
+      if (!desc) continue
+      if (Number.isNaN(priceNum) || !Number.isFinite(priceNum) || priceNum < 0) continue
+      payloadItems.push({ description: desc, price: priceNum })
+    }
+    try {
+      const res = await fetch(`${API}/invoices/${detailsOpen.id}/items`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: payloadItems })
+      })
+      if (!res.ok) throw new Error()
+      closeDetails()
+      fetchInvoices()
+    } catch {
+      setError('Failed to save changes')
+    }
+  }
 
   function addItem(e) {
     e.preventDefault()
@@ -184,6 +232,9 @@ export default function App() {
               <td>{inv.total}</td>
               <td>{inv.paid ? `YES (${inv.amountPaid} via ${inv.paymentMethod})` : 'NO'}</td>
               <td>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                  <button type="button" onClick={() => openDetails(inv)}>Details</button>
+                </div>
                 {!inv.paid && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -215,6 +266,60 @@ export default function App() {
           ))}
         </tbody>
       </table>
+      {detailsOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#fff', padding: 16, borderRadius: 8, width: 700, maxHeight: '80vh', overflow: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h2 style={{ margin: 0 }}>Invoice {detailsOpen.id}</h2>
+              <button type="button" onClick={closeDetails}>Close</button>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div><strong>Customer:</strong> {detailsOpen.customerName}</div>
+              <div><strong>Date:</strong> {detailsOpen.date}</div>
+              <div><strong>Paid:</strong> {detailsOpen.paid ? `YES (${detailsOpen.amountPaid} via ${detailsOpen.paymentMethod})` : 'NO'}</div>
+            </div>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: '8px 0' }}>Items</h3>
+                <button type="button" onClick={addDetailsItem}>Add item</button>
+              </div>
+              <table width="100%" cellPadding="6" style={{ borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th align="left">Description</th>
+                    <th align="left">Price</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailsItems.map((it, idx) => (
+                    <tr key={idx} style={{ borderTop: '1px solid #eee' }}>
+                      <td style={{ width: '70%' }}>
+                        <input style={{ width: '100%' }} value={it.description} onChange={e => updateDetailsItem(idx, 'description', e.target.value)} />
+                      </td>
+                      <td style={{ width: '20%' }}>
+                        <input style={{ width: '100%' }} value={it.price} onChange={e => updateDetailsItem(idx, 'price', e.target.value)} />
+                      </td>
+                      <td style={{ width: '10%' }}>
+                        <button type="button" onClick={() => removeDetailsItem(idx)} style={{ color: '#b00020' }}>Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {detailsItems.length === 0 && (
+                    <tr>
+                      <td colSpan={3} style={{ color: '#666' }}>No items</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button type="button" onClick={closeDetails}>Cancel</button>
+              <button type="button" onClick={saveDetails}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -83,4 +83,27 @@ public class InvoiceService {
         }
         return repository.deleteById(invoiceId.trim());
     }
+
+    public Invoice updateLineItems(String invoiceId, List<LineItem> items) {
+        if (invoiceId == null || invoiceId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invoice ID cannot be null or empty");
+        }
+        Invoice invoice = repository.findById(invoiceId.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Invoice not found with ID: " + invoiceId));
+
+        invoice.getItems().clear();
+        if (items != null) {
+            for (LineItem item : items) {
+                if (item == null) continue;
+                if (item.getDescription() == null || item.getDescription().trim().isEmpty()) {
+                    throw new IllegalArgumentException("Item description cannot be blank");
+                }
+                if (item.getPrice() == null) {
+                    throw new IllegalArgumentException("Item price cannot be null");
+                }
+                invoice.addItem(new LineItem(item.getDescription().trim(), item.getPrice()));
+            }
+        }
+        return repository.save(invoice);
+    }
 }
