@@ -11,6 +11,7 @@ export default function App() {
   const [newItemDesc, setNewItemDesc] = useState('')
   const [newItemPrice, setNewItemPrice] = useState('')
   const [newItems, setNewItems] = useState([])
+  const [rowItems, setRowItems] = useState({}) // { [invoiceId]: { desc, price } }
 
   async function fetchInvoices() {
     setLoading(true)
@@ -91,6 +92,33 @@ export default function App() {
     }
   }
 
+  function updateRowItem(invId, field, value) {
+    setRowItems(prev => ({
+      ...prev,
+      [invId]: { ...(prev[invId] || { desc: '', price: '' }), [field]: value }
+    }))
+  }
+
+  async function addItemToInvoice(invId) {
+    const entry = rowItems[invId] || { desc: '', price: '' }
+    const desc = String(entry.desc || '').trim()
+    const priceNum = parseFloat(String(entry.price).replace(',', '.'))
+    if (!desc) return
+    if (Number.isNaN(priceNum) || !Number.isFinite(priceNum) || priceNum < 0) return
+    try {
+      const res = await fetch(`${API}/invoices/${invId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: desc, price: priceNum })
+      })
+      if (!res.ok) throw new Error()
+      setRowItems(prev => ({ ...prev, [invId]: { desc: '', price: '' } }))
+      fetchInvoices()
+    } catch {
+      setError('Failed to add item')
+    }
+  }
+
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', margin: '2rem auto', maxWidth: 900 }}>
       <h1>Invoice App</h1>
@@ -145,7 +173,26 @@ export default function App() {
               <td>{inv.total}</td>
               <td>{inv.paid ? `YES (${inv.amountPaid} via ${inv.paymentMethod})` : 'NO'}</td>
               <td>
-                {!inv.paid && <button onClick={() => payInvoice(inv.id)}>Pay</button>}
+                {!inv.paid && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        style={{ minWidth: 180 }}
+                        placeholder="New item description"
+                        value={(rowItems[inv.id]?.desc) || ''}
+                        onChange={e => updateRowItem(inv.id, 'desc', e.target.value)}
+                      />
+                      <input
+                        style={{ width: 110 }}
+                        placeholder="Price"
+                        value={(rowItems[inv.id]?.price) || ''}
+                        onChange={e => updateRowItem(inv.id, 'price', e.target.value)}
+                      />
+                      <button type="button" onClick={() => addItemToInvoice(inv.id)}>Add item</button>
+                    </div>
+                    <button type="button" onClick={() => payInvoice(inv.id)}>Pay</button>
+                  </div>
+                )}
               </td>
             </tr>
           ))}
