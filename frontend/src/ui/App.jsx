@@ -8,6 +8,9 @@ export default function App() {
   const [error, setError] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [search, setSearch] = useState('')
+  const [newItemDesc, setNewItemDesc] = useState('')
+  const [newItemPrice, setNewItemPrice] = useState('')
+  const [newItems, setNewItems] = useState([])
 
   async function fetchInvoices() {
     setLoading(true)
@@ -27,6 +30,21 @@ export default function App() {
     fetchInvoices()
   }, [])
 
+  function addItem(e) {
+    e.preventDefault()
+    const desc = newItemDesc.trim()
+    const priceNum = parseFloat(String(newItemPrice).replace(',', '.'))
+    if (!desc) return
+    if (Number.isNaN(priceNum) || !Number.isFinite(priceNum) || priceNum < 0) return
+    setNewItems(items => [...items, { description: desc, price: priceNum }])
+    setNewItemDesc('')
+    setNewItemPrice('')
+  }
+
+  function removeItem(index) {
+    setNewItems(items => items.filter((_, i) => i !== index))
+  }
+
   async function createInvoice(e) {
     e.preventDefault()
     if (!customerName.trim()) return
@@ -34,10 +52,11 @@ export default function App() {
       const res = await fetch(`${API}/invoices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerName, items: [] })
+        body: JSON.stringify({ customerName, items: newItems })
       })
       if (!res.ok) throw new Error()
       setCustomerName('')
+      setNewItems([])
       fetchInvoices()
     } catch {
       setError('Failed to create invoice')
@@ -76,7 +95,27 @@ export default function App() {
     <div style={{ fontFamily: 'system-ui, sans-serif', margin: '2rem auto', maxWidth: 900 }}>
       <h1>Invoice App</h1>
       <form onSubmit={createInvoice} style={{ marginBottom: '1rem' }}>
-        <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer name" />
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+          <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Customer name" />
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+          <input style={{ minWidth: 260 }} value={newItemDesc} onChange={e => setNewItemDesc(e.target.value)} placeholder="Item description" />
+          <input style={{ width: 120 }} value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} placeholder="Price" />
+          <button onClick={addItem} type="button">Add item</button>
+        </div>
+        {newItems.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <strong>Items:</strong>
+            <ul style={{ marginTop: 6 }}>
+              {newItems.map((it, idx) => (
+                <li key={`${it.description}-${idx}`}>
+                  {it.description} — {it.price}
+                  <button type="button" style={{ marginLeft: 8 }} onClick={() => removeItem(idx)}>Remove</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <button type="submit">Create</button>
       </form>
       <form onSubmit={doSearch} style={{ marginBottom: '1rem' }}>

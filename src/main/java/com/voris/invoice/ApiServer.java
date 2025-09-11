@@ -66,13 +66,47 @@ public class ApiServer {
 
 		post("/invoices", (req, res) -> {
 			res.type("application/json");
-			CreateInvoiceBody body = gson.fromJson(req.body(), CreateInvoiceBody.class);
-			if (body == null || body.customerName == null || body.customerName.isBlank()) {
+			String contentType = req.contentType() == null ? "" : req.contentType().toLowerCase();
+			String customerName;
+			List<LineItem> items;
+			if (contentType.contains("application/json")) {
+				CreateInvoiceBody body = gson.fromJson(req.body(), CreateInvoiceBody.class);
+				customerName = body == null ? null : (body.customerName != null ? body.customerName : req.queryParams("customerName"));
+				if (customerName == null || customerName.isBlank()) {
+					// Try fallback field name "name"
+					customerName = body == null ? null : (String) (body.customerName == null ? null : body.customerName);
+					if (customerName == null || customerName.isBlank()) {
+						customerName = req.queryParams("name");
+					}
+				}
+				items = (body != null && body.items != null) ? body.items : List.of();
+			} else {
+				// Handle HTML form posts (application/x-www-form-urlencoded or multipart)
+				customerName = req.queryParams("customerName");
+				if (customerName == null || customerName.isBlank()) {
+					customerName = req.queryParams("name");
+				}
+				// Optional single item support from form: description, price
+				String description = req.queryParams("description");
+				String priceStr = req.queryParams("price");
+				if (description != null && !description.isBlank() && priceStr != null && !priceStr.isBlank()) {
+					try {
+						BigDecimal price = new BigDecimal(priceStr.trim());
+						items = List.of(new LineItem(description.trim(), price));
+					} catch (NumberFormatException ex) {
+						items = List.of();
+					}
+				} else {
+					items = List.of();
+				}
+			}
+
+			if (customerName == null || customerName.isBlank()) {
 				res.status(400);
 				return gson.toJson(Map.of("error", "customerName is required"));
 			}
-			List<LineItem> items = body.items == null ? List.of() : body.items;
-			Invoice created = service.createInvoice(body.customerName, items);
+
+			Invoice created = service.createInvoice(customerName, items);
 			res.status(201);
 			return gson.toJson(toDto(created));
 		});
@@ -80,9 +114,20 @@ public class ApiServer {
 		post("/invoices/:id/items", (req, res) -> {
 			res.type("application/json");
 			String id = req.params(":id");
-			LineItem body = gson.fromJson(req.body(), LineItem.class);
+			String contentType = req.contentType() == null ? "" : req.contentType().toLowerCase();
+			String description;
+			BigDecimal price;
+			if (contentType.contains("application/json")) {
+				LineItem body = gson.fromJson(req.body(), LineItem.class);
+				description = body == null ? null : body.getDescription();
+				price = body == null ? null : body.getPrice();
+			} else {
+				description = req.queryParams("description");
+				String priceStr = req.queryParams("price");
+				price = priceStr == null || priceStr.isBlank() ? null : new BigDecimal(priceStr.trim());
+			}
 			try {
-				Invoice updated = service.addLineItem(id, body.getDescription(), body.getPrice());
+				Invoice updated = service.addLineItem(id, description, price);
 				return gson.toJson(toDto(updated));
 			} catch (IllegalArgumentException e) {
 				res.status(400);
