@@ -41,6 +41,7 @@ public class App {
                 case "4" -> addLineItemFlow(scanner);
                 case "5" -> payInvoiceFlow(scanner);
                 case "6" -> deleteInvoiceFlow(scanner);
+                case "7" -> modifyInvoiceFlow(scanner);
                 case "0" -> {
                     System.out.println("Goodbye!");
                     return;
@@ -58,6 +59,7 @@ public class App {
         System.out.println("4) Add line item to existing invoice");
         System.out.println("5) Pay invoice");
         System.out.println("6) Delete invoice");
+        System.out.println("7) Modify invoice");
         System.out.println("0) Exit");
         System.out.print("Select: ");
     }
@@ -144,6 +146,159 @@ public class App {
             printInvoice(updated);
         } catch (IllegalArgumentException ex) {
             System.out.println("Error: " + ex.getMessage());
+        }
+    }
+
+    private void modifyInvoiceFlow(Scanner scanner) {
+        System.out.print("Enter invoice ID to modify: ");
+        String id = scanner.nextLine().trim();
+        
+        try {
+            // Get the current invoice
+            Invoice invoice = service.getById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Invoice not found with ID: " + id));
+            
+            System.out.println("\nCurrent invoice details:");
+            printInvoice(invoice);
+            
+            // Show modification menu
+            while (true) {
+                System.out.println("\nWhat would you like to modify?");
+                System.out.println("1) Customer name");
+                System.out.println("2) Invoice date");
+                System.out.println("3) Line items");
+                System.out.println("0) Back to main menu");
+                System.out.print("Select: ");
+                
+                String choice = scanner.nextLine().trim();
+                switch (choice) {
+                    case "1" -> {
+                        System.out.print("New customer name: ");
+                        String newName = scanner.nextLine().trim();
+                        invoice.setCustomerName(newName);
+                        service.updateInvoice(invoice);
+                        System.out.println("Customer name updated successfully.");
+                    }
+                    case "2" -> {
+                        System.out.print("New invoice date (YYYY-MM-DD): ");
+                        String dateStr = scanner.nextLine().trim();
+                        try {
+                            LocalDate newDate = LocalDate.parse(dateStr);
+                            invoice.setDate(newDate);
+                            service.updateInvoice(invoice);
+                            System.out.println("Invoice date updated successfully.");
+                        } catch (DateTimeParseException e) {
+                            System.out.println("Invalid date format. Please use YYYY-MM-DD format.");
+                        }
+                    }
+                    case "3" -> modifyLineItemsFlow(scanner, invoice);
+                    case "0" -> { return; }
+                    default -> System.out.println("Invalid choice. Please try again.");
+                }
+                
+                // Show updated invoice
+                System.out.println("\nUpdated invoice:");
+                printInvoice(invoice);
+            }
+            
+        } catch (IllegalArgumentException ex) {
+            System.out.println("Error: " + ex.getMessage());
+        }
+    }
+    
+    private void modifyLineItemsFlow(Scanner scanner, Invoice invoice) {
+        while (true) {
+            System.out.println("\nCurrent line items:");
+            List<LineItem> items = invoice.getItems();
+            if (items.isEmpty()) {
+                System.out.println("  No line items yet.");
+            } else {
+                for (int i = 0; i < items.size(); i++) {
+                    LineItem item = items.get(i);
+                    System.out.printf("%d) %s - $%.2f%n", 
+                        i + 1, item.getDescription(), item.getPrice());
+                }
+            }
+            
+            System.out.println("\nOptions:");
+            System.out.println("1) Add new item");
+            System.out.println("2) Remove item");
+            System.out.println("3) Modify item");
+            System.out.println("0) Back to previous menu");
+            System.out.print("Select: ");
+            
+            String choice = scanner.nextLine().trim();
+            switch (choice) {
+                case "1" -> {
+                    System.out.print("Description: ");
+                    String desc = scanner.nextLine().trim();
+                    BigDecimal price = readPrice(scanner, "Price: ");
+                    invoice.addItem(new LineItem(desc, price));
+                    service.updateInvoice(invoice);
+                    System.out.println("Item added successfully.");
+                }
+                case "2" -> {
+                    if (items.isEmpty()) {
+                        System.out.println("No items to remove.");
+                        continue;
+                    }
+                    System.out.print("Enter item number to remove: ");
+                    try {
+                        int index = Integer.parseInt(scanner.nextLine()) - 1;
+                        if (index >= 0 && index < items.size()) {
+                            items.remove(index);
+                            service.updateInvoice(invoice);
+                            System.out.println("Item removed successfully.");
+                        } else {
+                            System.out.println("Invalid item number.");
+                        }
+                    } catch (NumberFormatException e) {
+                        System.out.println("Please enter a valid number.");
+                    }
+                }
+                case "3" -> {
+                    if (items.isEmpty()) {
+                        System.out.println("No items to modify.");
+                        continue;
+                    }
+                    System.out.print("Enter item number to modify: ");
+                    try {
+                        int index = Integer.parseInt(scanner.nextLine()) - 1;
+                        if (index >= 0 && index < items.size()) {
+                            LineItem item = items.get(index);
+                            System.out.print("New description (leave blank to keep current): ");
+                            String newDesc = scanner.nextLine().trim();
+                            if (!newDesc.isEmpty()) {
+                                item.setDescription(newDesc);
+                            }
+                            
+                            System.out.print("New price (leave blank to keep current): ");
+                            String priceStr = scanner.nextLine().trim();
+                            if (!priceStr.isEmpty()) {
+                                try {
+                                    BigDecimal newPrice = new BigDecimal(priceStr);
+                                    if (newPrice.compareTo(BigDecimal.ZERO) < 0) {
+                                        System.out.println("Price cannot be negative. Keeping current price.");
+                                    } else {
+                                        item.setPrice(newPrice);
+                                    }
+                                } catch (NumberFormatException e) {
+                                    System.out.println("Invalid price format. Keeping current price.");
+                                }
+                            }
+                            
+                            service.updateInvoice(invoice);
+                            System.out.println("Item updated successfully.");
+                        } else {
+                            System.out.println("Invalid item number.");
+                        }
+                    } catch (NumberFormatException e) {
+                        System.out.println("Please enter a valid number.");
+                    }
+                }
+                case "0" -> { return; }
+                default -> System.out.println("Invalid choice. Please try again.");
+            }
         }
     }
 

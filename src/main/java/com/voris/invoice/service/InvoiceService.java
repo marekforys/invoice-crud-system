@@ -83,6 +83,28 @@ public class InvoiceService {
         }
         return repository.deleteById(invoiceId.trim());
     }
+    
+    public Invoice updateInvoice(Invoice invoice) {
+        if (invoice == null) {
+            throw new IllegalArgumentException("Invoice cannot be null");
+        }
+        if (invoice.getId() == null || invoice.getId().trim().isEmpty()) {
+            throw new IllegalArgumentException("Invoice ID cannot be null or empty");
+        }
+        if (invoice.getCustomerName() == null || invoice.getCustomerName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Customer name cannot be null or empty");
+        }
+        if (invoice.getDate() == null) {
+            throw new IllegalArgumentException("Invoice date cannot be null");
+        }
+        
+        // Verify the invoice exists
+        if (!repository.findById(invoice.getId()).isPresent()) {
+            throw new IllegalArgumentException("Invoice not found with ID: " + invoice.getId());
+        }
+        
+        return repository.save(invoice);
+    }
 
     public Invoice updateLineItems(String invoiceId, List<LineItem> items) {
         if (invoiceId == null || invoiceId.trim().isEmpty()) {
