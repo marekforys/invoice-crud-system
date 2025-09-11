@@ -76,4 +76,11 @@ public class InvoiceService {
         }
         return repository.markPaid(invoiceId.trim(), amount, method.trim(), date);
     }
+
+    public boolean deleteInvoice(String invoiceId) {
+        if (invoiceId == null || invoiceId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invoice ID cannot be null or empty");
+        }
+        return repository.deleteById(invoiceId.trim());
+    }
 }

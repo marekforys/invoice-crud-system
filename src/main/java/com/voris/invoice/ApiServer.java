@@ -151,6 +151,24 @@ public class ApiServer {
 			}
 		});
 
+		delete("/invoices/:id", (req, res) -> {
+			res.type("application/json");
+			String id = req.params(":id");
+			try {
+				boolean removed = service.deleteInvoice(id);
+				if (removed) {
+					res.status(204);
+					return "";
+				} else {
+					res.status(404);
+					return gson.toJson(Map.of("error", "Not found"));
+				}
+			} catch (IllegalArgumentException e) {
+				res.status(400);
+				return gson.toJson(Map.of("error", e.getMessage()));
+			}
+		});
+
 		init();
 		awaitInitialization();
 		System.out.println("API server is running on http://localhost:" + 8080);
@@ -159,7 +177,7 @@ public class ApiServer {
 	private static void enableCORS(String origin) {
 		options("/*", (request, response) -> {
 			response.header("Access-Control-Allow-Origin", origin);
-			response.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+			response.header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
 			response.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
 			response.status(200);
 			return "OK";

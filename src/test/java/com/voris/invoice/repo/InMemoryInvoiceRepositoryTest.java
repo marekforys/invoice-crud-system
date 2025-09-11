@@ -172,4 +172,27 @@ class InMemoryInvoiceRepositoryTest {
         assertEquals("CASH", updated.getPaymentMethod());
         assertEquals(date, updated.getPaymentDate());
     }
+
+    @Test
+    void deleteById_RemovesInvoiceAndReturnsTrue_WhenPresent() {
+        // Arrange
+        Invoice saved = repository.save(new Invoice("Del Customer"));
+        String id = saved.getId();
+
+        // Act
+        boolean removed = repository.deleteById(id);
+
+        // Assert
+        assertTrue(removed);
+        assertTrue(repository.findById(id).isEmpty());
+    }
+
+    @Test
+    void deleteById_ReturnsFalse_WhenNotPresent() {
+        // Act
+        boolean removed = repository.deleteById("missing");
+
+        // Assert
+        assertFalse(removed);
+    }
 }

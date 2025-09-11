@@ -119,6 +119,17 @@ export default function App() {
     }
   }
 
+  async function deleteInvoice(id) {
+    if (!confirm('Delete this invoice? This cannot be undone.')) return
+    try {
+      const res = await fetch(`${API}/invoices/${id}`, { method: 'DELETE' })
+      if (!res.ok && res.status !== 204) throw new Error()
+      fetchInvoices()
+    } catch {
+      setError('Failed to delete invoice')
+    }
+  }
+
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', margin: '2rem auto', maxWidth: 900 }}>
       <h1>Invoice App</h1>
@@ -190,8 +201,14 @@ export default function App() {
                       />
                       <button type="button" onClick={() => addItemToInvoice(inv.id)}>Add item</button>
                     </div>
-                    <button type="button" onClick={() => payInvoice(inv.id)}>Pay</button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button type="button" onClick={() => payInvoice(inv.id)}>Pay</button>
+                      <button type="button" onClick={() => deleteInvoice(inv.id)} style={{ color: '#b00020' }}>Delete</button>
+                    </div>
                   </div>
+                )}
+                {inv.paid && (
+                  <button type="button" onClick={() => deleteInvoice(inv.id)} style={{ color: '#b00020' }}>Delete</button>
                 )}
               </td>
             </tr>

@@ -28,7 +28,8 @@ public class InMemoryInvoiceRepository implements InvoiceRepository {
     }
 
     @Override
-    public List<Invoice> search(String query) {
+    public List<Invoice> 
+    search(String query) {
         if (query == null) {
             return new ArrayList<>();
         }
@@ -55,5 +56,13 @@ public class InMemoryInvoiceRepository implements InvoiceRepository {
                 .orElseThrow(() -> new IllegalArgumentException("Invoice not found with ID: " + invoiceId));
         invoice.markPaid(amount, method, date);
         return save(invoice);
+    }
+
+    @Override
+    public boolean deleteById(String id) {
+        if (id == null || id.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invoice ID cannot be null or empty");
+        }
+        return store.remove(id) != null;
     }
 }

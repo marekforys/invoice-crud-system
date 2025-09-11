@@ -17,4 +17,6 @@ public interface InvoiceRepository {
     List<Invoice> search(String query);
 
     Invoice markPaid(String invoiceId, BigDecimal amount, String method, LocalDate date);
+
+    boolean deleteById(String id);
 }

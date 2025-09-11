@@ -194,4 +194,27 @@ class InvoiceServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.payInvoice(invoice.getId(), new BigDecimal("-1"), "CASH", null));
         assertThrows(IllegalArgumentException.class, () -> service.payInvoice(invoice.getId(), BigDecimal.TEN, " ", null));
     }
+
+    @Test
+    void deleteInvoice_RemovesExisting_ReturnsTrue() {
+        // Arrange
+        Invoice invoice = service.createInvoice("To Delete", null);
+
+        // Act
+        boolean removed = service.deleteInvoice(invoice.getId());
+
+        // Assert
+        assertTrue(removed);
+        assertTrue(service.getById(invoice.getId()).isEmpty());
+    }
+
+    @Test
+    void deleteInvoice_WithMissingId_ReturnsFalse() {
+        assertFalse(service.deleteInvoice("missing"));
+    }
+
+    @Test
+    void deleteInvoice_WithBlankId_Throws() {
+        assertThrows(IllegalArgumentException.class, () -> service.deleteInvoice(" "));
+    }
 }

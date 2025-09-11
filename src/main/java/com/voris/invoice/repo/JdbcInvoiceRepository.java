@@ -176,6 +176,19 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         }
     }
 
+    @Override
+    public boolean deleteById(String id) {
+        try (Connection conn = getConnection()) {
+            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM invoices WHERE id = ?")) {
+                ps.setString(1, id);
+                int updated = ps.executeUpdate();
+                return updated > 0;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to delete invoice", e);
+        }
+    }
+
     private Invoice mapInvoiceRow(ResultSet rs, boolean hasPayment) throws SQLException {
         String id = rs.getString("id");
         String customer = rs.getString("customer_name");
