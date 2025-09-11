@@ -153,6 +153,20 @@ class InvoiceServiceTest {
     }
 
     @Test
+    void addLineItem_WithBlankDescription_ShouldThrow() {
+        Invoice invoice = service.createInvoice("Test Customer", null);
+        assertThrows(IllegalArgumentException.class,
+                () -> service.addLineItem(invoice.getId(), " ", BigDecimal.ONE));
+    }
+
+    @Test
+    void addLineItem_WithNullPrice_ShouldThrow() {
+        Invoice invoice = service.createInvoice("Test Customer", null);
+        assertThrows(IllegalArgumentException.class,
+                () -> service.addLineItem(invoice.getId(), "Item", null));
+    }
+
+    @Test
     void payInvoice_WithValidData_ShouldMarkPaid() {
         // Arrange
         Invoice invoice = service.createInvoice("Payable", null);

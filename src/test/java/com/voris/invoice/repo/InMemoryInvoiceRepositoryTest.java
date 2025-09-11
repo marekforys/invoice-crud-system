@@ -125,6 +125,39 @@ class InMemoryInvoiceRepositoryTest {
     }
 
     @Test
+    void search_ByItemDescription_ShouldReturnInvoicesContainingMatchingItems() {
+        // Arrange
+        Invoice inv1 = new Invoice("Acme Co");
+        inv1.addItem(new LineItem("Consulting", new BigDecimal("100.00")));
+        Invoice inv2 = new Invoice("Beta LLC");
+        inv2.addItem(new LineItem("Hardware", new BigDecimal("50.00")));
+        repository.save(inv1);
+        repository.save(inv2);
+
+        // Act
+        List<Invoice> results = repository.search("consult");
+
+        // Assert
+        assertEquals(1, results.size());
+        assertEquals(inv1.getId(), results.get(0).getId());
+    }
+
+    @Test
+    void search_IsCaseInsensitive_And_TrimsWhitespace() {
+        // Arrange
+        Invoice inv = new Invoice("Gamma Inc");
+        inv.addItem(new LineItem("Cloud Services", new BigDecimal("25.00")));
+        repository.save(inv);
+
+        // Act
+        List<Invoice> results = repository.search("  CLOUd   ");
+
+        // Assert
+        assertEquals(1, results.size());
+        assertEquals(inv.getId(), results.get(0).getId());
+    }
+
+    @Test
     void markPaid_ShouldPersistPaymentFields() {
         // Arrange
         Invoice saved = repository.save(testInvoice);
