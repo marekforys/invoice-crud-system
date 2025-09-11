@@ -40,6 +40,7 @@ public class App {
                 case "3" -> searchInvoices(scanner);
                 case "4" -> addLineItemFlow(scanner);
                 case "5" -> payInvoiceFlow(scanner);
+                case "6" -> deleteInvoiceFlow(scanner);
                 case "0" -> {
                     System.out.println("Goodbye!");
                     return;
@@ -56,6 +57,7 @@ public class App {
         System.out.println("3) Search invoices");
         System.out.println("4) Add line item to existing invoice");
         System.out.println("5) Pay invoice");
+        System.out.println("6) Delete invoice");
         System.out.println("0) Exit");
         System.out.print("Select: ");
     }
@@ -140,6 +142,22 @@ public class App {
             Invoice updated = service.addLineItem(id, desc, price);
             System.out.println("Updated invoice: ");
             printInvoice(updated);
+        } catch (IllegalArgumentException ex) {
+            System.out.println("Error: " + ex.getMessage());
+        }
+    }
+
+    private void deleteInvoiceFlow(Scanner scanner) {
+        System.out.print("Enter invoice ID to delete: ");
+        String id = scanner.nextLine().trim();
+        
+        try {
+            boolean deleted = service.deleteInvoice(id);
+            if (deleted) {
+                System.out.println("Invoice " + id + " has been deleted successfully.");
+            } else {
+                System.out.println("Invoice " + id + " was not found or could not be deleted.");
+            }
         } catch (IllegalArgumentException ex) {
             System.out.println("Error: " + ex.getMessage());
         }
