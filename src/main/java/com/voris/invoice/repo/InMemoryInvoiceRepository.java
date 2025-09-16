@@ -48,13 +48,13 @@ public class InMemoryInvoiceRepository implements InvoiceRepository {
     }
 
     @Override
-    public Invoice markPaid(String invoiceId, BigDecimal amount, String method, LocalDate date) {
+    public Invoice addPayment(String invoiceId, BigDecimal amount, String method, LocalDate date, String reference) {
         if (invoiceId == null || invoiceId.trim().isEmpty()) {
             throw new IllegalArgumentException("Invoice ID cannot be null or empty");
         }
         Invoice invoice = findById(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Invoice not found with ID: " + invoiceId));
-        invoice.markPaid(amount, method, date);
+        invoice.addPayment(amount, method, date, reference);
         return save(invoice);
     }
 
@@ -64,5 +64,16 @@ public class InMemoryInvoiceRepository implements InvoiceRepository {
             throw new IllegalArgumentException("Invoice ID cannot be null or empty");
         }
         return store.remove(id) != null;
+    }
+    
+    @Override
+    public List<com.voris.invoice.model.Payment> getPaymentHistory(String invoiceId) {
+        if (invoiceId == null || invoiceId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invoice ID cannot be null or empty");
+        }
+        
+        return findById(invoiceId)
+            .map(Invoice::getPaymentHistory)
+            .orElseThrow(() -> new IllegalArgumentException("Invoice not found with ID: " + invoiceId));
     }
 }

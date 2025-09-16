@@ -3,6 +3,7 @@ package com.voris.invoice.model;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -12,10 +13,7 @@ public class Invoice {
     private String customerName;
     private LocalDate date;
     private final List<LineItem> items = new ArrayList<>();
-    private boolean paid;
-    private LocalDate paymentDate;
-    private BigDecimal amountPaid;
-    private String paymentMethod;
+    private final List<Payment> payments = new ArrayList<>();
 
     public Invoice(String customerName) {
         if (customerName == null || customerName.trim().isEmpty()) {
@@ -84,35 +82,70 @@ public class Invoice {
     }
 
     public boolean isPaid() {
-        return paid;
+        return getRemainingBalance().compareTo(BigDecimal.ZERO) <= 0;
     }
 
-    public LocalDate getPaymentDate() {
-        return paymentDate;
+    public LocalDate getLastPaymentDate() {
+        if (payments.isEmpty()) {
+            return null;
+        }
+        return payments.get(payments.size() - 1).getDate();
     }
 
     public BigDecimal getAmountPaid() {
-        return amountPaid;
+        return payments.stream()
+                .map(Payment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    public List<Payment> getPaymentHistory() {
+        List<Payment> sortedPayments = new ArrayList<>(payments);
+        sortedPayments.sort((p1, p2) -> p1.getDate().compareTo(p2.getDate()));
+        return sortedPayments;
+    }
+    
     public String getPaymentMethod() {
-        return paymentMethod;
+        if (payments.isEmpty()) {
+            return null;
+        }
+        return payments.get(payments.size() - 1).getMethod();
     }
-
-    public void markPaid(BigDecimal amount, String method, LocalDate when) {
+    
+    /**
+     * Adds a payment to this invoice
+     * @param amount The payment amount (must be positive)
+     * @param method The payment method (e.g., CASH, CARD, BANK_TRANSFER)
+     * @param when The date of the payment (if null, uses current date)
+     * @param reference Optional reference for the payment
+     * @throws IllegalArgumentException if amount is null or not positive, or if method is null/empty
+     */
+    public void addPayment(BigDecimal amount, String method, LocalDate when, String reference) {
         if (amount == null) {
             throw new IllegalArgumentException("Amount cannot be null");
         }
-        if (amount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Amount cannot be negative");
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Amount must be positive");
         }
         if (method == null || method.trim().isEmpty()) {
             throw new IllegalArgumentException("Payment method cannot be null or empty");
         }
-        this.paid = true;
-        this.amountPaid = amount;
-        this.paymentMethod = method.trim();
-        this.paymentDate = when == null ? LocalDate.now() : when;
+        
+        BigDecimal remainingBalance = getRemainingBalance();
+        if (amount.compareTo(remainingBalance) > 0) {
+            throw new IllegalArgumentException("Payment amount cannot exceed remaining balance");
+        }
+        
+        Payment payment = new Payment(
+            amount, 
+            method.trim(), 
+            when != null ? when : LocalDate.now(),
+            reference != null ? reference : ""
+        );
+        payments.add(payment);
+    }
+
+    public BigDecimal getRemainingBalance() {
+        return getTotal().subtract(getAmountPaid());
     }
 
     @Override
@@ -122,18 +155,25 @@ public class Invoice {
         Invoice invoice = (Invoice) o;
         return Objects.equals(customerName, invoice.customerName) &&
                Objects.equals(date, invoice.date) &&
-               Objects.equals(items, invoice.items);
+               Objects.equals(items, invoice.items) &&
+               Objects.equals(payments, invoice.payments);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(customerName, date, items);
+        return Objects.hash(customerName, date, items, payments);
     }
 
     @Override
     public String toString() {
         return "Invoice{" +
-                "customerName='" + customerName + '\'' +
-                "}";
+                "id='" + id + '\'' +
+                ", customerName='" + customerName + '\'' +
+                ", date=" + date +
+                ", total=" + getTotal() +
+                ", amountPaid=" + getAmountPaid() +
+                ", remainingBalance=" + getRemainingBalance() +
+                ", paid=" + isPaid() +
+                '}';
     }
 }

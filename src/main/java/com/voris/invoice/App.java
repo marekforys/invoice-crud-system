@@ -2,6 +2,7 @@ package com.voris.invoice;
 
 import com.voris.invoice.model.Invoice;
 import com.voris.invoice.model.LineItem;
+import com.voris.invoice.model.Payment;
 import com.voris.invoice.repo.InMemoryInvoiceRepository;
 import com.voris.invoice.repo.JdbcInvoiceRepository;
 import com.voris.invoice.service.InvoiceService;
@@ -89,25 +90,31 @@ public class App {
     }
 
     private void payInvoiceFlow(Scanner scanner) {
-        System.out.print("Invoice ID: ");
+        System.out.println("\n--- Add Payment to Invoice ---");
+        listInvoices();
+        System.out.print("Enter invoice ID to add payment: ");
         String id = scanner.nextLine().trim();
-        BigDecimal amount = readPrice(scanner, "Amount paid: ");
+        System.out.print("Payment amount: ");
+        BigDecimal amount = readPrice(scanner, "Payment amount: ");
         System.out.print("Payment method (e.g., CASH/CARD/BANK_TRANSFER): ");
         String method = scanner.nextLine().trim();
         System.out.print("Payment date (YYYY-MM-DD, blank for today): ");
         String dateStr = scanner.nextLine().trim();
+        System.out.print("Payment reference (optional): ");
+        String reference = scanner.nextLine().trim();
+        
         LocalDate date = null;
         if (!dateStr.isEmpty()) {
             try {
                 date = LocalDate.parse(dateStr);
             } catch (DateTimeParseException e) {
                 System.out.println("Invalid date format. Using today.");
-                date = null;
             }
         }
+        
         try {
-            Invoice updated = service.payInvoice(id, amount, method, date);
-            System.out.println("Invoice paid successfully:");
+            Invoice updated = service.addPayment(id, amount, method, date, reference);
+            System.out.println("Payment added successfully:");
             printInvoice(updated);
         } catch (IllegalArgumentException ex) {
             System.out.println("Error: " + ex.getMessage());
@@ -331,12 +338,12 @@ public class App {
     }
 
     private void printInvoice(Invoice invoice) {
-        System.out.println("-----------------------------");
-        System.out.println("ID: " + invoice.getId());
+        System.out.println("\n--- Invoice " + invoice.getId() + " ---");
         System.out.println("Customer: " + invoice.getCustomerName());
         System.out.println("Date: " + invoice.getDate());
+        System.out.println("Items:");
         if (invoice.getItems().isEmpty()) {
-            System.out.println("  (no line items)");
+            System.out.println("  No items");
         } else {
             for (int i = 0; i < invoice.getItems().size(); i++) {
                 LineItem it = invoice.getItems().get(i);
@@ -344,14 +351,27 @@ public class App {
             }
         }
         System.out.println("Total: " + invoice.getTotal());
-        if (invoice.isPaid()) {
-            System.out.println("Paid: YES");
-            System.out.println("Payment date: " + invoice.getPaymentDate());
-            System.out.println("Amount paid: " + invoice.getAmountPaid());
-            System.out.println("Payment method: " + invoice.getPaymentMethod());
-        } else {
-            System.out.println("Paid: NO");
+        
+        // Show payment status
+        System.out.println("Amount paid: " + invoice.getAmountPaid() + 
+                          " (Remaining: " + invoice.getRemainingBalance() + ")");
+        
+        // Show payment history
+        List<Payment> payments = invoice.getPaymentHistory();
+        if (!payments.isEmpty()) {
+            System.out.println("\nPayment History:");
+            for (int i = 0; i < payments.size(); i++) {
+                Payment p = payments.get(i);
+                System.out.printf("  %d. %s - %s - %s - %s%n", 
+                    i + 1, 
+                    p.getDate(),
+                    p.getMethod(),
+                    p.getAmount(),
+                    p.getReference().isEmpty() ? "" : "(" + p.getReference() + ")");
+            }
         }
+        
+        System.out.println("Status: " + (invoice.isPaid() ? "PAID" : "PENDING"));
         System.out.println("-----------------------------");
     }
 }

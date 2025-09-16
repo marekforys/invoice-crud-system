@@ -127,33 +127,93 @@ class InvoiceTest {
     }
 
     @Test
-    void markPaid_WithValidData_SetsPaymentFields() {
-        // Act
+    void addPayment_WithValidData_AddsPayment() {
+        // Arrange
         LocalDate date = LocalDate.now();
-        invoice.markPaid(new BigDecimal("100.00"), "CARD", date);
-
+        invoice.addItem(new LineItem("Test Item", new BigDecimal("100.00")));
+        
+        // Act
+        invoice.addPayment(new BigDecimal("50.00"), "CARD", date, "REF123");
+        
         // Assert
+        List<Payment> payments = invoice.getPaymentHistory();
+        assertEquals(1, payments.size());
+        Payment payment = payments.get(0);
+        assertEquals(0, new BigDecimal("50.00").compareTo(payment.getAmount()));
+        assertEquals("CARD", payment.getMethod());
+        assertEquals(date, payment.getDate());
+        assertEquals("REF123", payment.getReference());
+    }
+    
+    @Test
+    void addPayment_WithNullAmount_Throws() {
+        assertThrows(IllegalArgumentException.class,
+                () -> invoice.addPayment(null, "CARD", LocalDate.now(), ""));
+    }
+    
+    @Test
+    void addPayment_WithNegativeAmount_Throws() {
+        assertThrows(IllegalArgumentException.class,
+                () -> invoice.addPayment(new BigDecimal("-1"), "CARD", LocalDate.now(), ""));
+    }
+    
+    @Test
+    void addPayment_WithBlankMethod_Throws() {
+        assertThrows(IllegalArgumentException.class,
+                () -> invoice.addPayment(new BigDecimal("10"), " ", LocalDate.now(), ""));
+    }
+    
+    @Test
+    void addPayment_WithNullReference_ConvertsToEmptyString() {
+        // Arrange
+        invoice.addItem(new LineItem("Test Item", new BigDecimal("100.00")));
+        
+        // Act
+        invoice.addPayment(new BigDecimal("10"), "CASH", LocalDate.now(), null);
+        
+        // Assert
+        assertEquals("", invoice.getPaymentHistory().get(0).getReference());
+    }
+    
+    @Test
+    void getAmountPaid_WithMultiplePayments_ReturnsSum() {
+        // Arrange
+        invoice.addItem(new LineItem("Test Item", new BigDecimal("100.00")));
+        invoice.addPayment(new BigDecimal("30.00"), "CARD", LocalDate.now(), "1");
+        invoice.addPayment(new BigDecimal("20.00"), "CASH", LocalDate.now().plusDays(1), "2");
+        
+        // Act & Assert
+        assertEquals(0, new BigDecimal("50.00").compareTo(invoice.getAmountPaid()));
+    }
+    
+    @Test
+    void isPaid_WhenTotalPaidEqualsTotal_ReturnsTrue() {
+        // Arrange
+        invoice.addItem(new LineItem("Test Item", new BigDecimal("100.00")));
+        invoice.addPayment(new BigDecimal("100.00"), "CARD", LocalDate.now(), "FULL");
+        
+        // Act & Assert
         assertTrue(invoice.isPaid());
-        assertEquals(0, new BigDecimal("100.00").compareTo(invoice.getAmountPaid()));
-        assertEquals("CARD", invoice.getPaymentMethod());
-        assertEquals(date, invoice.getPaymentDate());
     }
-
+    
     @Test
-    void markPaid_WithNullAmount_Throws() {
-        assertThrows(IllegalArgumentException.class,
-                () -> invoice.markPaid(null, "CARD", LocalDate.now()));
+    void isPaid_WhenTotalPaidLessThanTotal_ReturnsFalse() {
+        // Arrange
+        invoice.addItem(new LineItem("Item", new BigDecimal("100.00")));
+        invoice.addPayment(new BigDecimal("99.99"), "TRANSFER", LocalDate.now(), "");
+        
+        // Act & Assert
+        assertFalse(invoice.isPaid());
     }
-
+    
     @Test
-    void markPaid_WithNegativeAmount_Throws() {
-        assertThrows(IllegalArgumentException.class,
-                () -> invoice.markPaid(new BigDecimal("-1"), "CARD", LocalDate.now()));
-    }
-
-    @Test
-    void markPaid_WithBlankMethod_Throws() {
-        assertThrows(IllegalArgumentException.class,
-                () -> invoice.markPaid(new BigDecimal("10"), " ", LocalDate.now()));
+    void getRemainingBalance_CalculatesCorrectly() {
+        // Arrange
+        invoice.addItem(new LineItem("Item", new BigDecimal("100.00")));
+        invoice.addPayment(new BigDecimal("40.00"), "CARD", LocalDate.now(), "1");
+        invoice.addPayment(new BigDecimal("30.00"), "CASH", LocalDate.now(), "2");
+        
+        // Act & Assert
+        assertEquals(0, new BigDecimal("30.00").compareTo(invoice.getRemainingBalance()));
     }
 }

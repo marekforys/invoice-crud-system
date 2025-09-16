@@ -2,6 +2,7 @@ package com.voris.invoice.service;
 
 import com.voris.invoice.model.Invoice;
 import com.voris.invoice.model.LineItem;
+import com.voris.invoice.model.Payment;
 import com.voris.invoice.repo.InvoiceRepository;
 
 import java.math.BigDecimal;
@@ -61,20 +62,32 @@ public class InvoiceService {
         return repository.save(invoice);
     }
 
-    public Invoice payInvoice(String invoiceId, BigDecimal amount, String method, LocalDate date) {
+    public Invoice addPayment(String invoiceId, BigDecimal amount, String method, LocalDate date, String reference) {
         if (invoiceId == null || invoiceId.trim().isEmpty()) {
             throw new IllegalArgumentException("Invoice ID cannot be null or empty");
         }
         if (amount == null) {
             throw new IllegalArgumentException("Amount cannot be null");
         }
-        if (amount.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException("Amount cannot be negative");
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Amount must be positive");
         }
         if (method == null || method.trim().isEmpty()) {
             throw new IllegalArgumentException("Payment method cannot be null or empty");
         }
-        return repository.markPaid(invoiceId.trim(), amount, method.trim(), date);
+        if (reference == null) {
+            reference = "";
+        }
+        return repository.addPayment(invoiceId.trim(), amount, method.trim(), date, reference);
+    }
+    
+    public List<Payment> getPaymentHistory(String invoiceId) {
+        if (invoiceId == null || invoiceId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invoice ID cannot be null or empty");
+        }
+        Invoice invoice = repository.findById(invoiceId.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Invoice not found with ID: " + invoiceId));
+        return invoice.getPaymentHistory();
     }
 
     public boolean deleteInvoice(String invoiceId) {

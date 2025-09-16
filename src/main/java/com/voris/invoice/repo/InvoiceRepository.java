@@ -16,7 +16,15 @@ public interface InvoiceRepository {
 
     List<Invoice> search(String query);
 
-    Invoice markPaid(String invoiceId, BigDecimal amount, String method, LocalDate date);
+    Invoice addPayment(String invoiceId, BigDecimal amount, String method, LocalDate date, String reference);
 
     boolean deleteById(String id);
+    
+    /**
+     * Retrieves the payment history for a specific invoice.
+     * @param invoiceId The ID of the invoice to get payment history for
+     * @return List of payments in chronological order (oldest first)
+     * @throws IllegalArgumentException if invoiceId is null or empty
+     */
+    List<com.voris.invoice.model.Payment> getPaymentHistory(String invoiceId);
 }

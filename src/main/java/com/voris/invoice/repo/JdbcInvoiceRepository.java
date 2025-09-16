@@ -2,6 +2,9 @@ package com.voris.invoice.repo;
 
 import com.voris.invoice.model.Invoice;
 import com.voris.invoice.model.LineItem;
+import com.voris.invoice.model.Payment;
+
+import java.util.UUID;
 
 import java.math.BigDecimal;
 import java.sql.*;
@@ -26,37 +29,40 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         String createInvoices = "CREATE TABLE IF NOT EXISTS invoices (" +
                 "id TEXT PRIMARY KEY, " +
                 "customer_name TEXT NOT NULL, " +
-                "date TEXT NOT NULL, " +
-                "paid INTEGER NOT NULL DEFAULT 0, " +
-                "payment_date TEXT, " +
-                "amount_paid TEXT, " +
-                "payment_method TEXT" +
+                "date TEXT NOT NULL" +
                 ")";
+                
+        String createPayments = "CREATE TABLE IF NOT EXISTS payments (" +
+                "id TEXT PRIMARY KEY, " +
+                "invoice_id TEXT NOT NULL, " +
+                "amount TEXT NOT NULL, " +
+                "method TEXT NOT NULL, " +
+                "date TEXT NOT NULL, " +
+                "reference TEXT, " +
+                "FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE" +
+                ")";
+                
         String createItems = "CREATE TABLE IF NOT EXISTS line_items (" +
                 "invoice_id TEXT NOT NULL, " +
                 "description TEXT NOT NULL, " +
                 "price TEXT, " +
                 "FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE" +
                 ")";
+                
         try (Connection conn = getConnection();
              Statement st = conn.createStatement()) {
             st.execute(createInvoices);
+            st.execute(createPayments);
             st.execute(createItems);
-
-            // Lightweight migration for existing DBs missing payment columns
+            
+            // Migration: Drop old payment columns if they exist
             try (Statement alter = conn.createStatement()) {
-                alter.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid INTEGER NOT NULL DEFAULT 0");
-                alter.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_date TEXT");
-                alter.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS amount_paid TEXT");
-                alter.execute("ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_method TEXT");
-            } catch (SQLException ignored) {
-                // Older SQLite may not support IF NOT EXISTS for columns; try without and ignore duplicate errors
-                try (Statement alter2 = conn.createStatement()) {
-                    try { alter2.execute("ALTER TABLE invoices ADD COLUMN paid INTEGER NOT NULL DEFAULT 0"); } catch (SQLException e) { /* ignore duplicate */ }
-                    try { alter2.execute("ALTER TABLE invoices ADD COLUMN payment_date TEXT"); } catch (SQLException e) { /* ignore duplicate */ }
-                    try { alter2.execute("ALTER TABLE invoices ADD COLUMN amount_paid TEXT"); } catch (SQLException e) { /* ignore duplicate */ }
-                    try { alter2.execute("ALTER TABLE invoices ADD COLUMN payment_method TEXT"); } catch (SQLException e) { /* ignore duplicate */ }
-                }
+                alter.execute("ALTER TABLE invoices DROP COLUMN IF EXISTS paid");
+                alter.execute("ALTER TABLE invoices DROP COLUMN IF EXISTS payment_date");
+                alter.execute("ALTER TABLE invoices DROP COLUMN IF EXISTS amount_paid");
+                alter.execute("ALTER TABLE invoices DROP COLUMN IF EXISTS payment_method");
+            } catch (SQLException e) {
+                // Ignore if columns don't exist
             }
         } catch (SQLException e) {
             throw new RuntimeException("Failed initializing schema", e);
@@ -68,17 +74,36 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
 
+            // Save invoice basic info
             try (PreparedStatement upsert = conn.prepareStatement(
-                    "INSERT INTO invoices(id, customer_name, date, paid, payment_date, amount_paid, payment_method) VALUES(?,?,?,?,?,?,?) " +
-                            "ON CONFLICT(id) DO UPDATE SET customer_name=excluded.customer_name, date=excluded.date, paid=excluded.paid, payment_date=excluded.payment_date, amount_paid=excluded.amount_paid, payment_method=excluded.payment_method")) {
+                    "INSERT INTO invoices(id, customer_name, date) VALUES(?,?,?) " +
+                            "ON CONFLICT(id) DO UPDATE SET customer_name=excluded.customer_name, date=excluded.date")) {
                 upsert.setString(1, invoice.getId());
                 upsert.setString(2, invoice.getCustomerName());
                 upsert.setString(3, invoice.getDate().toString());
-                upsert.setInt(4, invoice.isPaid() ? 1 : 0);
-                upsert.setString(5, invoice.getPaymentDate() == null ? null : invoice.getPaymentDate().toString());
-                upsert.setString(6, invoice.getAmountPaid() == null ? null : invoice.getAmountPaid().toPlainString());
-                upsert.setString(7, invoice.getPaymentMethod());
                 upsert.executeUpdate();
+            }
+
+            // Delete existing payments
+            try (PreparedStatement deletePayments = conn.prepareStatement(
+                    "DELETE FROM payments WHERE invoice_id = ?")) {
+                deletePayments.setString(1, invoice.getId());
+                deletePayments.executeUpdate();
+            }
+
+            // Insert current payments
+            try (PreparedStatement insertPayment = conn.prepareStatement(
+                    "INSERT INTO payments(id, invoice_id, amount, method, date, reference) VALUES(?,?,?,?,?,?)")) {
+                for (Payment payment : invoice.getPaymentHistory()) {
+                    insertPayment.setString(1, UUID.randomUUID().toString());
+                    insertPayment.setString(2, invoice.getId());
+                    insertPayment.setString(3, payment.getAmount().toPlainString());
+                    insertPayment.setString(4, payment.getMethod());
+                    insertPayment.setString(5, payment.getDate().toString());
+                    insertPayment.setString(6, payment.getReference());
+                    insertPayment.addBatch();
+                }
+                insertPayment.executeBatch();
             }
 
             try (PreparedStatement deleteItems = conn.prepareStatement("DELETE FROM line_items WHERE invoice_id = ?")) {
@@ -107,17 +132,12 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
     @Override
     public Optional<Invoice> findById(String id) {
         try (Connection conn = getConnection()) {
-            boolean hasPayment = hasPaymentColumns(conn);
-            String sql = hasPayment
-                    ? "SELECT id, customer_name, date, paid, payment_date, amount_paid, payment_method FROM invoices WHERE id = ?"
-                    : "SELECT id, customer_name, date FROM invoices WHERE id = ?";
+            String sql = "SELECT id, customer_name, date FROM invoices WHERE id = ?";
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setString(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return Optional.empty();
-                Invoice invoice = mapInvoiceRow(rs, hasPayment);
-                invoice.getItems().addAll(loadItems(conn, id));
-                return Optional.of(invoice);
+                return Optional.of(mapInvoiceRow(rs, true));
             }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to find invoice", e);
@@ -127,15 +147,12 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
     @Override
     public List<Invoice> findAll() {
         try (Connection conn = getConnection()) {
-            boolean hasPayment = hasPaymentColumns(conn);
-            String sql = hasPayment
-                    ? "SELECT id, customer_name, date, paid, payment_date, amount_paid, payment_method FROM invoices"
-                    : "SELECT id, customer_name, date FROM invoices";
+            String sql = "SELECT id, customer_name, date FROM invoices";
             PreparedStatement ps = conn.prepareStatement(sql);
             ResultSet rs = ps.executeQuery();
             List<Invoice> list = new ArrayList<>();
             while (rs.next()) {
-                Invoice inv = mapInvoiceRow(rs, hasPayment);
+                Invoice inv = mapInvoiceRow(rs, true);
                 inv.getItems().addAll(loadItems(conn, inv.getId()));
                 list.add(inv);
             }
@@ -152,10 +169,7 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         if (q.isEmpty()) return findAll();
 
         try (Connection conn = getConnection()) {
-            boolean hasPayment = hasPaymentColumns(conn);
-            String sql = (hasPayment
-                    ? "SELECT DISTINCT i.id, i.customer_name, i.date, i.paid, i.payment_date, i.amount_paid, i.payment_method "
-                    : "SELECT DISTINCT i.id, i.customer_name, i.date ") +
+            String sql = "SELECT DISTINCT i.id, i.customer_name, i.date " +
                     "FROM invoices i LEFT JOIN line_items li ON i.id = li.invoice_id " +
                     "WHERE LOWER(i.customer_name) LIKE ? OR LOWER(li.description) LIKE ?";
             PreparedStatement ps = conn.prepareStatement(sql);
@@ -165,7 +179,7 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
             try (ResultSet rs = ps.executeQuery()) {
                 List<Invoice> list = new ArrayList<>();
                 while (rs.next()) {
-                    Invoice inv = mapInvoiceRow(rs, hasPayment);
+                    Invoice inv = mapInvoiceRow(rs, true);
                     inv.getItems().addAll(loadItems(conn, inv.getId()));
                     list.add(inv);
                 }
@@ -178,14 +192,39 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
 
     @Override
     public boolean deleteById(String id) {
-        try (Connection conn = getConnection()) {
-            try (PreparedStatement ps = conn.prepareStatement("DELETE FROM invoices WHERE id = ?")) {
-                ps.setString(1, id);
-                int updated = ps.executeUpdate();
-                return updated > 0;
-            }
+        try (Connection conn = getConnection();
+             PreparedStatement st = conn.prepareStatement("DELETE FROM invoices WHERE id = ?")) {
+            st.setString(1, id);
+            return st.executeUpdate() > 0;
         } catch (SQLException e) {
             throw new RuntimeException("Failed to delete invoice", e);
+        }
+    }
+    
+    @Override
+    public List<Payment> getPaymentHistory(String invoiceId) {
+        String sql = "SELECT amount, method, date, reference FROM payments WHERE invoice_id = ? ORDER BY date";
+        
+        try (Connection conn = getConnection();
+             PreparedStatement st = conn.prepareStatement(sql)) {
+            
+            st.setString(1, invoiceId);
+            ResultSet rs = st.executeQuery();
+            
+            List<Payment> payments = new ArrayList<>();
+            while (rs.next()) {
+                BigDecimal amount = new BigDecimal(rs.getString("amount"));
+                String method = rs.getString("method");
+                LocalDate date = LocalDate.parse(rs.getString("date"));
+                String reference = rs.getString("reference");
+                
+                payments.add(new Payment(amount, method, date, reference));
+            }
+            
+            return payments;
+            
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to fetch payment history", e);
         }
     }
 
@@ -194,42 +233,28 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         String customer = rs.getString("customer_name");
         LocalDate date = LocalDate.parse(rs.getString("date"));
         Invoice invoice = new Invoice(id, customer, date);
-        if (hasPayment) {
-            int paid = rs.getInt("paid");
-            boolean isPaid = paid == 1;
-            if (isPaid) {
-                String amountStr = rs.getString("amount_paid");
-                String paymentDateStr = rs.getString("payment_date");
-                String method = rs.getString("payment_method");
-                invoice.markPaid(
-                        amountStr == null ? BigDecimal.ZERO : new BigDecimal(amountStr),
-                        method == null ? "" : method,
-                        paymentDateStr == null ? null : LocalDate.parse(paymentDateStr)
-                );
+        
+        // Load items and payments for this invoice
+        try (Connection conn = getConnection()) {
+            // Load line items first
+            List<LineItem> items = loadItems(conn, id);
+            for (LineItem item : items) {
+                invoice.addItem(item);
+            }
+            
+            // Then load payments
+            List<Payment> payments = loadPayments(conn, id);
+            for (Payment payment : payments) {
+                invoice.addPayment(payment.getAmount(), payment.getMethod(), payment.getDate(), payment.getReference());
             }
         }
+        
         return invoice;
     }
 
-    private boolean hasPaymentColumns(Connection conn) {
-        String pragma = "PRAGMA table_info(invoices)";
-        try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(pragma)) {
-            boolean hasPaid = false;
-            while (rs.next()) {
-                String name = rs.getString("name");
-                if ("paid".equalsIgnoreCase(name)) {
-                    hasPaid = true;
-                    break;
-                }
-            }
-            return hasPaid;
-        } catch (SQLException e) {
-            return false;
-        }
-    }
 
     @Override
-    public Invoice markPaid(String invoiceId, BigDecimal amount, String method, LocalDate date) {
+    public Invoice addPayment(String invoiceId, BigDecimal amount, String method, LocalDate date, String reference) {
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
             try {
@@ -237,27 +262,46 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
                 Invoice invoice = findById(invoiceId)
                         .orElseThrow(() -> new IllegalArgumentException("Invoice not found with ID: " + invoiceId));
 
-                // Update payment fields
+                // Add new payment
                 try (PreparedStatement ps = conn.prepareStatement(
-                        "UPDATE invoices SET paid = 1, payment_date = ?, amount_paid = ?, payment_method = ? WHERE id = ?")) {
-                    ps.setString(1, date == null ? LocalDate.now().toString() : date.toString());
-                    ps.setString(2, amount == null ? null : amount.toPlainString());
-                    ps.setString(3, method);
-                    ps.setString(4, invoiceId);
+                        "INSERT INTO payments(id, invoice_id, amount, method, date, reference) VALUES(?,?,?,?,?,?)")) {
+                    ps.setString(1, UUID.randomUUID().toString());
+                    ps.setString(2, invoiceId);
+                    ps.setString(3, amount.toPlainString());
+                    ps.setString(4, method);
+                    ps.setString(5, (date != null ? date : LocalDate.now()).toString());
+                    ps.setString(6, reference);
                     ps.executeUpdate();
                 }
 
-                // Commit before reloading so subsequent read sees committed data
+                // Commit and return updated invoice
                 conn.commit();
-                Invoice updated = findById(invoiceId)
-                        .orElseThrow(() -> new IllegalStateException("Invoice disappeared after update: " + invoiceId));
-                return updated;
+                return findById(invoiceId)
+                        .orElseThrow(() -> new IllegalStateException("Invoice disappeared after payment: " + invoiceId));
             } catch (Exception e) {
                 conn.rollback();
                 throw e;
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to mark invoice as paid", e);
+            throw new RuntimeException("Failed to add payment to invoice", e);
+        }
+    }
+    
+    private List<Payment> loadPayments(Connection conn, String invoiceId) throws SQLException {
+        String sql = "SELECT amount, method, date, reference FROM payments WHERE invoice_id = ? ORDER BY date";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, invoiceId);
+            try (ResultSet rs = ps.executeQuery()) {
+                List<Payment> payments = new ArrayList<>();
+                while (rs.next()) {
+                    BigDecimal amount = new BigDecimal(rs.getString("amount"));
+                    String method = rs.getString("method");
+                    LocalDate date = LocalDate.parse(rs.getString("date"));
+                    String reference = rs.getString("reference");
+                    payments.add(new Payment(amount, method, date, reference));
+                }
+                return payments;
+            }
         }
     }
 

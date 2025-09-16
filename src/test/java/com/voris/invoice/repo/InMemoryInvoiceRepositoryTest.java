@@ -158,19 +158,87 @@ class InMemoryInvoiceRepositoryTest {
     }
 
     @Test
-    void markPaid_ShouldPersistPaymentFields() {
+    void addPayment_ShouldAddPaymentToInvoice() {
         // Arrange
+        testInvoice.addItem(new LineItem("Test Item", new BigDecimal("100.00")));
         Invoice saved = repository.save(testInvoice);
         LocalDate date = LocalDate.now();
-
+        
         // Act
-        Invoice updated = repository.markPaid(saved.getId(), new BigDecimal("25.50"), "CASH", date);
-
+        Invoice updated = repository.addPayment(
+            saved.getId(), 
+            new BigDecimal("25.50"), 
+            "CASH", 
+            date, 
+            "REF123"
+        );
+        
         // Assert
-        assertTrue(updated.isPaid());
+        List<com.voris.invoice.model.Payment> payments = updated.getPaymentHistory();
+        assertEquals(1, payments.size());
+        assertEquals(0, new BigDecimal("25.50").compareTo(payments.get(0).getAmount()));
+        assertEquals("CASH", payments.get(0).getMethod());
+        assertEquals(date, payments.get(0).getDate());
+        assertEquals("REF123", payments.get(0).getReference());
+    }
+    
+    @Test
+    void addPayment_WithMultiplePayments_ShouldAccumulate() {
+        // Arrange
+        testInvoice.addItem(new LineItem("Test Item", new BigDecimal("100.00")));
+        Invoice saved = repository.save(testInvoice);
+        LocalDate date = LocalDate.now();
+        
+        // Act - Add two partial payments
+        repository.addPayment(saved.getId(), new BigDecimal("10.00"), "CARD", date, "REF1");
+        Invoice updated = repository.addPayment(
+            saved.getId(), 
+            new BigDecimal("15.50"), 
+            "CASH", 
+            date.plusDays(1), 
+            "REF2"
+        );
+        
+        // Assert
+        List<com.voris.invoice.model.Payment> payments = updated.getPaymentHistory();
+        assertEquals(2, payments.size());
         assertEquals(0, new BigDecimal("25.50").compareTo(updated.getAmountPaid()));
-        assertEquals("CASH", updated.getPaymentMethod());
-        assertEquals(date, updated.getPaymentDate());
+    }
+    
+    @Test
+    void addPayment_WithNonExistentInvoice_ShouldThrow() {
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> 
+            repository.addPayment(
+                "non-existent-id", 
+                new BigDecimal("10.00"), 
+                "CASH", 
+                LocalDate.now(), 
+                ""
+            )
+        );
+    }
+    
+    @Test
+    void getPaymentHistory_ReturnsAllPaymentsInOrder() {
+        // Arrange
+        testInvoice.addItem(new LineItem("Test Item", new BigDecimal("100.00")));
+        Invoice saved = repository.save(testInvoice);
+        LocalDate date1 = LocalDate.of(2023, 1, 1);
+        LocalDate date2 = LocalDate.of(2023, 1, 2);
+        
+        // Add payments out of order
+        repository.addPayment(saved.getId(), new BigDecimal("20.00"), "CARD", date2, "LATER");
+        repository.addPayment(saved.getId(), new BigDecimal("10.00"), "CASH", date1, "EARLIER");
+        
+        // Act
+        List<com.voris.invoice.model.Payment> history = repository.getPaymentHistory(saved.getId());
+        
+        // Assert
+        assertEquals(2, history.size());
+        // Should be ordered by date
+        assertEquals("EARLIER", history.get(0).getReference());
+        assertEquals("LATER", history.get(1).getReference());
     }
 
     @Test

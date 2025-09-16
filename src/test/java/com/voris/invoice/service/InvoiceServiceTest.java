@@ -4,6 +4,7 @@ import com.voris.invoice.model.Invoice;
 import com.voris.invoice.model.LineItem;
 import com.voris.invoice.repo.InMemoryInvoiceRepository;
 import com.voris.invoice.repo.InvoiceRepository;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -172,32 +173,123 @@ class InvoiceServiceTest {
     }
 
     @Test
-    void payInvoice_WithValidData_ShouldMarkPaid() {
+    void addPayment_WithValidData_ShouldAddPayment() {
         // Arrange
-        Invoice invoice = service.createInvoice("Payable", null);
+        Invoice invoice = service.createInvoice("Payable", List.of(
+            new LineItem("Item 1", new BigDecimal("50.00"))
+        ));
         LocalDate date = LocalDate.now();
-
+        
         // Act
-        Invoice updated = service.payInvoice(invoice.getId(), new BigDecimal("99.99"), "BANK_TRANSFER", date);
-
+        Invoice updated = service.addPayment(
+            invoice.getId(), 
+            new BigDecimal("30.00"), 
+            "CARD", 
+            date, 
+            "REF123"
+        );
+        
         // Assert
-        assertTrue(updated.isPaid());
-        assertEquals(0, new BigDecimal("99.99").compareTo(updated.getAmountPaid()));
-        assertEquals("BANK_TRANSFER", updated.getPaymentMethod());
-        assertEquals(date, updated.getPaymentDate());
+        List<com.voris.invoice.model.Payment> payments = updated.getPaymentHistory();
+        assertEquals(1, payments.size());
+        assertEquals(0, new BigDecimal("30.00").compareTo(payments.get(0).getAmount()));
+        assertEquals("CARD", payments.get(0).getMethod());
+        assertEquals(date, payments.get(0).getDate());
+        assertEquals("REF123", payments.get(0).getReference());
+        assertFalse(updated.isPaid()); // Not fully paid yet
     }
-
+    
     @Test
-    void payInvoice_WithInvalidInputs_ShouldThrow() {
+    void addPayment_WithMultiplePayments_ShouldAccumulate() {
         // Arrange
-        Invoice invoice = service.createInvoice("Payable", null);
-
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> service.payInvoice(null, BigDecimal.TEN, "CASH", null));
-        assertThrows(IllegalArgumentException.class, () -> service.payInvoice(" ", BigDecimal.TEN, "CASH", null));
-        assertThrows(IllegalArgumentException.class, () -> service.payInvoice(invoice.getId(), null, "CASH", null));
-        assertThrows(IllegalArgumentException.class, () -> service.payInvoice(invoice.getId(), new BigDecimal("-1"), "CASH", null));
-        assertThrows(IllegalArgumentException.class, () -> service.payInvoice(invoice.getId(), BigDecimal.TEN, " ", null));
+        Invoice invoice = service.createInvoice("Payable", List.of(
+            new LineItem("Item 1", new BigDecimal("100.00"))
+        ));
+        
+        // Act - Add two partial payments
+        service.addPayment(invoice.getId(), new BigDecimal("60.00"), "CARD", LocalDate.now(), "PART1");
+        Invoice updated = service.addPayment(
+            invoice.getId(), 
+            new BigDecimal("40.00"), 
+            "CASH", 
+            LocalDate.now().plusDays(1), 
+            "PART2"
+        );
+        
+        // Assert
+        assertEquals(0, new BigDecimal("100.00").compareTo(updated.getAmountPaid()));
+        assertTrue(updated.isPaid());
+        assertEquals(2, updated.getPaymentHistory().size());
+    }
+    
+    @Test
+    void addPayment_WithInvalidInputs_ShouldThrow() {
+        // Arrange
+        Invoice invoice = service.createInvoice("Payable", List.of(
+            new LineItem("Item 1", new BigDecimal("100.00"))
+        ));
+        
+        // Act & Assert - Test invalid invoice IDs
+        assertThrows(IllegalArgumentException.class, 
+            () -> service.addPayment(null, BigDecimal.TEN, "CASH", LocalDate.now(), ""));
+            
+        assertThrows(IllegalArgumentException.class, 
+            () -> service.addPayment(" ", BigDecimal.TEN, "CASH", LocalDate.now(), ""));
+            
+        // Test invalid payment amounts
+        assertThrows(IllegalArgumentException.class, 
+            () -> service.addPayment(invoice.getId(), null, "CASH", LocalDate.now(), ""));
+            
+        assertThrows(IllegalArgumentException.class, 
+            () -> service.addPayment(invoice.getId(), new BigDecimal("-1"), "CASH", LocalDate.now(), ""));
+            
+        // Test invalid payment method
+        assertThrows(IllegalArgumentException.class, 
+            () -> service.addPayment(invoice.getId(), BigDecimal.TEN, " ", LocalDate.now(), ""));
+            
+        // Test null date - should be allowed and default to current date
+        try {
+            service.addPayment(invoice.getId(), new BigDecimal("10.00"), "CARD", null, null);
+            // If we get here, the test passes
+        } catch (Exception e) {
+            Assertions.fail("Adding payment with null date threw an exception: " + e.getMessage());
+        }
+        
+        // Test payment that would exceed the remaining balance
+        assertThrows(IllegalArgumentException.class,
+            () -> service.addPayment(invoice.getId(), new BigDecimal("200.00"), "CASH", LocalDate.now(), ""));
+            
+        // Pay off the invoice completely
+        service.addPayment(invoice.getId(), new BigDecimal("90.00"), "CASH", LocalDate.now(), "FULL");
+        
+        // Test adding payment to already paid invoice - should throw IllegalArgumentException
+        // because the payment would exceed the remaining balance (which is now zero)
+        assertThrows(IllegalArgumentException.class,
+            () -> service.addPayment(invoice.getId(), BigDecimal.ONE, "CASH", LocalDate.now(), "EXTRA"));
+    }
+    @Test
+    void getPaymentHistory_ShouldReturnAllPayments() {
+        // Arrange
+        Invoice invoice = service.createInvoice("With Payments", List.of(
+            new LineItem("Item 1", new BigDecimal("75.00"))
+        ));
+        
+        // Add payments
+        service.addPayment(invoice.getId(), new BigDecimal("25.00"), "CARD", LocalDate.of(2023, 1, 1), "PART1");
+        service.addPayment(invoice.getId(), new BigDecimal("25.00"), "CASH", LocalDate.of(2023, 1, 2), "PART2");
+        
+        // Act
+        List<com.voris.invoice.model.Payment> history = service.getPaymentHistory(invoice.getId());
+        
+        // Assert
+        assertEquals(2, history.size());
+        assertEquals("PART1", history.get(0).getReference());
+        assertEquals("PART2", history.get(1).getReference());
+        assertEquals(0, new BigDecimal("50.00").compareTo(
+            history.stream()
+                .map(com.voris.invoice.model.Payment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+        ));
     }
 
     @Test
@@ -314,18 +406,19 @@ class InvoiceServiceTest {
         // Arrange
         Invoice invoice = service.createInvoice("Test Customer", List.of(
             new LineItem("Old Item 1", new BigDecimal("10.00")),
-            new LineItem("Old Item 2", new BigDecimal("20.00"))
-        ));
-        
-        // Get the invoice to update
-        Invoice toUpdate = service.getById(invoice.getId()).orElseThrow();
-        
-        // Update line items
+            new LineItem("Old Item 2", new BigDecimal("20.00"))));
+            
+        // Create line items for update
         List<LineItem> newItems = List.of(
             new LineItem("New Item 1", new BigDecimal("15.50")),
             new LineItem("New Item 2", new BigDecimal("25.75")),
             new LineItem("New Item 3", new BigDecimal("30.25"))
         );
+        
+        // Get the invoice to update
+        Invoice toUpdate = service.getById(invoice.getId()).orElseThrow();
+        
+        // Update line items
         
         toUpdate.getItems().clear();
         toUpdate.getItems().addAll(newItems);

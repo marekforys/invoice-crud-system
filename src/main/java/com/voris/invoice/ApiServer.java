@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.voris.invoice.model.Invoice;
 import com.voris.invoice.model.LineItem;
+import com.voris.invoice.model.Payment;
 import com.voris.invoice.repo.JdbcInvoiceRepository;
 import com.voris.invoice.service.InvoiceService;
 
@@ -11,17 +12,29 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static spark.Spark.*;
 
 public class ApiServer {
+	private final Gson gson = new GsonBuilder().create();
+	private final InvoiceService service;
+	
+	public ApiServer(InvoiceService service) {
+		this.service = service;
+	}
+	
 	public static void start() {
 		port(8080);
 		enableCORS("*");
-		Gson gson = new GsonBuilder().create();
-
 		String dbPath = System.getProperty("invoice.db", "jdbc:sqlite:invoice.db");
 		InvoiceService service = new InvoiceService(new JdbcInvoiceRepository(dbPath));
+		
+		ApiServer apiServer = new ApiServer(service);
+		apiServer.setupRoutes();
+	}
+	
+	private void setupRoutes() {
 
 		get("/health", (req, res) -> {
 			res.type("text/plain");
@@ -45,7 +58,9 @@ public class ApiServer {
 
 		get("/invoices", (req, res) -> {
 			res.type("application/json");
-			return gson.toJson(service.getAll().stream().map(ApiServer::toDto).toList());
+			return gson.toJson(service.getAll().stream()
+				.map(this::toDto)
+				.collect(Collectors.toList()));
 		});
 
 		get("/invoices/:id", (req, res) -> {
@@ -61,7 +76,9 @@ public class ApiServer {
 		get("/search", (req, res) -> {
 			res.type("application/json");
 			String q = req.queryParams("q");
-			return gson.toJson(service.search(q).stream().map(ApiServer::toDto).toList());
+			return gson.toJson(service.search(q).stream()
+				.map(this::toDto)
+				.collect(Collectors.toList()));
 		});
 
 		post("/invoices", (req, res) -> {
@@ -156,18 +173,35 @@ public class ApiServer {
 			}
 		});
 
-		post("/invoices/:id/pay", (req, res) -> {
+		post("/invoices/:id/payments", (req, res) -> {
 			res.type("application/json");
 			String id = req.params(":id");
-			PayBody body = gson.fromJson(req.body(), PayBody.class);
+			AddPaymentBody body = gson.fromJson(req.body(), AddPaymentBody.class);
 			try {
-				Invoice updated = service.payInvoice(id,
-						body.amount,
-						body.method,
-						body.date == null ? null : LocalDate.parse(body.date));
+				Invoice updated = service.addPayment(
+					id,
+					new BigDecimal(body.amount),
+					body.method,
+					body.date == null ? null : LocalDate.parse(body.date),
+					body.reference
+				);
 				return gson.toJson(toDto(updated));
 			} catch (IllegalArgumentException e) {
 				res.status(400);
+				return gson.toJson(Map.of("error", e.getMessage()));
+			}
+		});
+		
+		get("/invoices/:id/payments", (req, res) -> {
+			res.type("application/json");
+			String id = req.params(":id");
+			try {
+				List<Payment> payments = service.getPaymentHistory(id);
+				return gson.toJson(payments.stream()
+				.map(payment -> toPaymentDto(payment))
+				.collect(Collectors.toList()));
+			} catch (IllegalArgumentException e) {
+				res.status(404);
 				return gson.toJson(Map.of("error", e.getMessage()));
 			}
 		});
@@ -210,17 +244,28 @@ public class ApiServer {
 		});
 	}
 
-	private static InvoiceDto toDto(Invoice inv) {
+	private InvoiceDto toDto(Invoice inv) {
 		InvoiceDto dto = new InvoiceDto();
 		dto.id = inv.getId();
 		dto.customerName = inv.getCustomerName();
 		dto.date = inv.getDate() == null ? null : inv.getDate().toString();
 		dto.total = inv.getTotal() == null ? null : inv.getTotal().toPlainString();
 		dto.paid = inv.isPaid();
-		dto.paymentDate = inv.getPaymentDate() == null ? null : inv.getPaymentDate().toString();
 		dto.amountPaid = inv.getAmountPaid() == null ? null : inv.getAmountPaid().toPlainString();
-		dto.paymentMethod = inv.getPaymentMethod();
+		dto.remainingBalance = inv.getRemainingBalance() == null ? null : inv.getRemainingBalance().toPlainString();
 		dto.items = inv.getItems();
+		dto.paymentHistory = inv.getPaymentHistory().stream()
+			.map(this::toPaymentDto)
+			.collect(Collectors.toList());
+		return dto;
+	}
+	
+	private PaymentDto toPaymentDto(Payment payment) {
+		PaymentDto dto = new PaymentDto();
+		dto.amount = payment.getAmount().toPlainString();
+		dto.method = payment.getMethod();
+		dto.date = payment.getDate().toString();
+		dto.reference = payment.getReference();
 		return dto;
 	}
 
@@ -230,10 +275,17 @@ public class ApiServer {
 		String date;
 		String total;
 		boolean paid;
-		String paymentDate;
 		String amountPaid;
-		String paymentMethod;
+		String remainingBalance;
 		List<LineItem> items;
+		List<PaymentDto> paymentHistory;
+	}
+	
+	private static class PaymentDto {
+		String amount;
+		String method;
+		String date;
+		String reference;
 	}
 
 	private static class CreateInvoiceBody {
@@ -241,10 +293,11 @@ public class ApiServer {
 		List<LineItem> items;
 	}
 
-	private static class PayBody {
-		BigDecimal amount;
+	private static class AddPaymentBody {
+		String amount;
 		String method;
 		String date; // ISO yyyy-MM-dd
+		String reference;
 	}
 
 	private static class UpdateItemsBody {
