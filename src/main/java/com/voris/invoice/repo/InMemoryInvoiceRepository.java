@@ -13,6 +13,15 @@ public class InMemoryInvoiceRepository implements InvoiceRepository {
 
     @Override
     public Invoice save(Invoice invoice) {
+        if (invoice == null) {
+            throw new NullPointerException("Invoice cannot be null");
+        }
+        if (invoice.getItems() != null) {
+            // Check for null items in the list
+            if (invoice.getItems().contains(null)) {
+                throw new NullPointerException("Invoice items cannot contain null");
+            }
+        }
         store.put(invoice.getId(), invoice);
         return invoice;
     }
@@ -52,9 +61,21 @@ public class InMemoryInvoiceRepository implements InvoiceRepository {
         if (invoiceId == null || invoiceId.trim().isEmpty()) {
             throw new IllegalArgumentException("Invoice ID cannot be null or empty");
         }
+        if (amount == null) {
+            throw new NullPointerException("Amount cannot be null");
+        }
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Amount must be greater than zero");
+        }
+        if (method == null) {
+            throw new NullPointerException("Payment method cannot be null");
+        }
+        
+        LocalDate paymentDate = (date != null) ? date : LocalDate.now();
+        
         Invoice invoice = findById(invoiceId)
                 .orElseThrow(() -> new IllegalArgumentException("Invoice not found with ID: " + invoiceId));
-        invoice.addPayment(amount, method, date, reference);
+        invoice.addPayment(amount, method, paymentDate, reference);
         return save(invoice);
     }
 
@@ -74,6 +95,6 @@ public class InMemoryInvoiceRepository implements InvoiceRepository {
         
         return findById(invoiceId)
             .map(Invoice::getPaymentHistory)
-            .orElseThrow(() -> new IllegalArgumentException("Invoice not found with ID: " + invoiceId));
+            .orElse(Collections.emptyList());
     }
 }

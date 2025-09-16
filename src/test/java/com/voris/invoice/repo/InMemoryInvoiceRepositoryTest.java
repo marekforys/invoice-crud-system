@@ -263,4 +263,146 @@ class InMemoryInvoiceRepositoryTest {
         // Assert
         assertFalse(removed);
     }
+
+    @Test
+    void save_WithNullInvoice_ShouldThrowException() {
+        // Act & Assert
+        assertThrows(NullPointerException.class, () -> repository.save(null));
+    }
+
+    @Test
+    void save_WithEmptyCustomerName_ShouldThrowException() {
+        // Act & Assert - The exception should be thrown by the Invoice constructor
+        assertThrows(IllegalArgumentException.class, 
+            () -> new Invoice(" ").addItem(new LineItem("Test Item", new BigDecimal("10.00")))
+        );
+    }
+
+    @Test
+    void save_WithNullLineItem_ShouldThrowException() {
+        // Arrange
+        Invoice invoice = new Invoice("Test Customer");
+        
+        // Act & Assert - The exception should be thrown by addItem() before we even call save()
+        assertThrows(IllegalArgumentException.class, () -> invoice.addItem(null));
+    }
+
+    @Test
+    void search_WithSpecialCharacters_ShouldHandleThemGracefully() {
+        // Arrange
+        Invoice inv = new Invoice("Customer with special chars: !@#$%^&*()");
+        repository.save(inv);
+
+        // Act
+        List<Invoice> results = repository.search("special chars:");
+
+        // Assert
+        assertEquals(1, results.size());
+        assertEquals(inv.getId(), results.get(0).getId());
+    }
+
+    @Test
+    void addPayment_WithNullAmount_ShouldThrowException() {
+        // Arrange
+        Invoice saved = repository.save(testInvoice);
+
+        // Act & Assert
+        assertThrows(NullPointerException.class, () -> 
+            repository.addPayment(saved.getId(), null, "CASH", LocalDate.now(), "")
+        );
+    }
+
+    @Test
+    void addPayment_WithNegativeAmount_ShouldThrowException() {
+        // Arrange
+        Invoice saved = repository.save(testInvoice);
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> 
+            repository.addPayment(saved.getId(), new BigDecimal("-10.00"), "CASH", LocalDate.now(), "")
+        );
+    }
+
+    @Test
+    void addPayment_WithZeroAmount_ShouldThrowException() {
+        // Arrange
+        Invoice saved = repository.save(testInvoice);
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> 
+            repository.addPayment(saved.getId(), BigDecimal.ZERO, "CASH", LocalDate.now(), "")
+        );
+    }
+
+    @Test
+    void addPayment_WithNullPaymentMethod_ShouldThrowException() {
+        // Arrange
+        Invoice saved = repository.save(testInvoice);
+
+        // Act & Assert
+        assertThrows(NullPointerException.class, () -> 
+            repository.addPayment(saved.getId(), new BigDecimal("10.00"), null, LocalDate.now(), "")
+        );
+    }
+
+    @Test
+    void addPayment_WithNullDate_ShouldUseCurrentDate() {
+        // Arrange
+        Invoice saved = repository.save(testInvoice);
+        LocalDate beforeTest = LocalDate.now();
+
+        // Act
+        Invoice updated = repository.addPayment(
+            saved.getId(), 
+            new BigDecimal("10.00"), 
+            "CASH", 
+            null, 
+            "TEST"
+        );
+
+        // Assert
+        LocalDate paymentDate = updated.getPaymentHistory().get(0).getDate();
+        assertNotNull(paymentDate);
+        assertFalse(paymentDate.isBefore(beforeTest));
+        assertFalse(paymentDate.isAfter(LocalDate.now()));
+    }
+
+    @Test
+    void getPaymentHistory_ForInvoiceWithNoPayments_ShouldReturnEmptyList() {
+        // Arrange
+        Invoice saved = repository.save(testInvoice);
+
+        // Act
+        List<com.voris.invoice.model.Payment> history = repository.getPaymentHistory(saved.getId());
+
+        // Assert
+        assertTrue(history.isEmpty());
+    }
+
+    @Test
+    void getPaymentHistory_ForNonExistentInvoice_ShouldReturnEmptyList() {
+        // Act
+        List<com.voris.invoice.model.Payment> history = repository.getPaymentHistory("non-existent-id");
+
+        // Assert
+        assertTrue(history.isEmpty());
+    }
+
+    @Test
+    void save_WithMultipleItems_ShouldPreserveOrder() {
+        // Arrange
+        Invoice invoice = new Invoice("Test Customer");
+        invoice.addItem(new LineItem("Item 1", new BigDecimal("10.00")));
+        invoice.addItem(new LineItem("Item 2", new BigDecimal("20.00")));
+        invoice.addItem(new LineItem("Item 3", new BigDecimal("30.00")));
+
+        // Act
+        Invoice saved = repository.save(invoice);
+
+        // Assert
+        assertEquals(3, saved.getItems().size());
+        assertEquals("Item 1", saved.getItems().get(0).getDescription());
+        assertEquals("Item 2", saved.getItems().get(1).getDescription());
+        assertEquals("Item 3", saved.getItems().get(2).getDescription());
+    }
 }
