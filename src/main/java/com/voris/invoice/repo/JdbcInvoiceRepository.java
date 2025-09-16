@@ -5,7 +5,6 @@ import com.voris.invoice.model.LineItem;
 import com.voris.invoice.model.Payment;
 
 import java.util.UUID;
-
 import java.math.BigDecimal;
 import java.sql.*;
 import java.time.LocalDate;
@@ -13,8 +12,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * JDBC implementation of the InvoiceRepository interface.
+ * Provides database persistence for invoices, payments, and line items using SQLite.
+ * Handles all CRUD operations and maintains data consistency through transactions.
+ */
+
 public class JdbcInvoiceRepository implements InvoiceRepository {
+    /** JDBC connection URL for the SQLite database */
     private final String jdbcUrl;
+    
+    /**
+     * Constructs a new JdbcInvoiceRepository with the specified JDBC URL.
+     * Initializes the database schema if it doesn't exist.
+     * 
+     * @param jdbcUrl the JDBC URL for the SQLite database
+     */
 
     public JdbcInvoiceRepository(String jdbcUrl) {
         this.jdbcUrl = jdbcUrl;
@@ -25,28 +38,35 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         return DriverManager.getConnection(jdbcUrl);
     }
 
+    /**
+     * Initializes the database schema by creating required tables if they don't exist.
+     * Also handles migration by dropping old columns if they exist.
+     */
     private void initializeSchema() {
+        // SQL statement to create the invoices table
         String createInvoices = "CREATE TABLE IF NOT EXISTS invoices (" +
-                "id TEXT PRIMARY KEY, " +
-                "customer_name TEXT NOT NULL, " +
-                "date TEXT NOT NULL" +
+                "id TEXT PRIMARY KEY, " +           // Unique identifier for the invoice
+                "customer_name TEXT NOT NULL, " +   // Name of the customer
+                "date TEXT NOT NULL" +              // Date of the invoice (stored as ISO-8601 string)
                 ")";
                 
+        // SQL statement to create the payments table
         String createPayments = "CREATE TABLE IF NOT EXISTS payments (" +
-                "id TEXT PRIMARY KEY, " +
-                "invoice_id TEXT NOT NULL, " +
-                "amount TEXT NOT NULL, " +
-                "method TEXT NOT NULL, " +
-                "date TEXT NOT NULL, " +
-                "reference TEXT, " +
-                "FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE" +
+                "id TEXT PRIMARY KEY, " +           // Unique identifier for the payment
+                "invoice_id TEXT NOT NULL, " +      // Reference to the invoice
+                "amount TEXT NOT NULL, " +          // Payment amount (stored as string for precision)
+                "method TEXT NOT NULL, " +          // Payment method (e.g., CASH, CREDIT_CARD)
+                "date TEXT NOT NULL, " +            // Payment date (stored as ISO-8601 string)
+                "reference TEXT, " +                // Optional payment reference
+                "FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE" +  // Cascade delete payments when invoice is deleted
                 ")";
                 
+        // SQL statement to create the line_items table
         String createItems = "CREATE TABLE IF NOT EXISTS line_items (" +
-                "invoice_id TEXT NOT NULL, " +
-                "description TEXT NOT NULL, " +
-                "price TEXT, " +
-                "FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE" +
+                "invoice_id TEXT NOT NULL, " +      // Reference to the invoice
+                "description TEXT NOT NULL, " +      // Item description
+                "price TEXT, " +                    // Item price (stored as string for precision, nullable)
+                "FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE" +  // Cascade delete items when invoice is deleted
                 ")";
                 
         try (Connection conn = getConnection();
@@ -69,6 +89,14 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         }
     }
 
+    /**
+     * Saves an invoice to the database. If the invoice already exists, it updates it.
+     * Handles saving/updating invoice details, payments, and line items in a transaction.
+     * 
+     * @param invoice the invoice to save
+     * @return the saved invoice with updated data
+     * @throws RuntimeException if there's an error during database operations
+     */
     @Override
     public Invoice save(Invoice invoice) {
         try (Connection conn = getConnection()) {
@@ -129,6 +157,13 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         }
     }
 
+    /**
+     * Finds an invoice by its ID.
+     * 
+     * @param id the ID of the invoice to find
+     * @return an Optional containing the found invoice, or empty if not found
+     * @throws RuntimeException if there's an error during database operations
+     */
     @Override
     public Optional<Invoice> findById(String id) {
         try (Connection conn = getConnection()) {
@@ -144,6 +179,12 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         }
     }
 
+    /**
+     * Retrieves all invoices from the database.
+     * 
+     * @return a list of all invoices, or an empty list if none found
+     * @throws RuntimeException if there's an error during database operations
+     */
     @Override
     public List<Invoice> findAll() {
         try (Connection conn = getConnection()) {
@@ -160,6 +201,13 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         }
     }
 
+    /**
+     * Searches for invoices by customer name or line item description.
+     * 
+     * @param query the search term (case-insensitive)
+     * @return a list of matching invoices, or an empty list if no matches found
+     * @throws RuntimeException if there's an error during database operations
+     */
     @Override
     public List<Invoice> search(String query) {
         if (query == null) return new ArrayList<>();
@@ -186,6 +234,15 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         }
     }
 
+    /**
+     * Deletes an invoice by its ID.
+     * Due to foreign key constraints with CASCADE, this will also delete
+     * associated payments and line items.
+     * 
+     * @param id the ID of the invoice to delete
+     * @return true if the invoice was deleted, false if no invoice was found with the given ID
+     * @throws RuntimeException if there's an error during database operations
+     */
     @Override
     public boolean deleteById(String id) {
         try (Connection conn = getConnection();
@@ -197,6 +254,13 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         }
     }
     
+    /**
+     * Retrieves the payment history for a specific invoice.
+     * 
+     * @param invoiceId the ID of the invoice
+     * @return a list of payments for the specified invoice, ordered by date
+     * @throws RuntimeException if there's an error during database operations
+     */
     @Override
     public List<Payment> getPaymentHistory(String invoiceId) {
         String sql = "SELECT amount, method, date, reference FROM payments WHERE invoice_id = ? ORDER BY date";
@@ -224,6 +288,15 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         }
     }
 
+    /**
+     * Maps a database result set row to an Invoice object.
+     * Loads associated line items and payments for the invoice.
+     * 
+     * @param rs the ResultSet containing invoice data
+     * @param hasPayment whether to load payment information (can be false for performance in some cases)
+     * @return a populated Invoice object
+     * @throws SQLException if there's an error accessing the database
+     */
     private Invoice mapInvoiceRow(ResultSet rs, boolean hasPayment) throws SQLException {
         String id = rs.getString("id");
         String customer = rs.getString("customer_name");
@@ -249,6 +322,18 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
     }
 
 
+    /**
+     * Adds a payment to an existing invoice.
+     * 
+     * @param invoiceId the ID of the invoice to add the payment to
+     * @param amount the payment amount
+     * @param method the payment method (e.g., CASH, CREDIT_CARD)
+     * @param date the payment date (if null, uses current date)
+     * @param reference optional payment reference
+     * @return the updated invoice with the new payment
+     * @throws IllegalArgumentException if no invoice exists with the given ID
+     * @throws RuntimeException if there's an error during database operations
+     */
     @Override
     public Invoice addPayment(String invoiceId, BigDecimal amount, String method, LocalDate date, String reference) {
         try (Connection conn = getConnection()) {
@@ -283,6 +368,14 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         }
     }
     
+    /**
+     * Loads all payments for a specific invoice.
+     * 
+     * @param conn the database connection to use
+     * @param invoiceId the ID of the invoice to load payments for
+     * @return a list of payments for the specified invoice, ordered by date
+     * @throws SQLException if there's an error executing the database query
+     */
     private List<Payment> loadPayments(Connection conn, String invoiceId) throws SQLException {
         String sql = "SELECT amount, method, date, reference FROM payments WHERE invoice_id = ? ORDER BY date";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -301,6 +394,14 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
         }
     }
 
+    /**
+     * Loads all line items for a specific invoice.
+     * 
+     * @param conn the database connection to use
+     * @param invoiceId the ID of the invoice to load items for
+     * @return a list of line items for the specified invoice
+     * @throws SQLException if there's an error executing the database query
+     */
     private List<LineItem> loadItems(Connection conn, String invoiceId) throws SQLException {
         String sql = "SELECT description, price FROM line_items WHERE invoice_id = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
