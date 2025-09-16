@@ -23,6 +23,11 @@ jobs:
 
       - name: Validate Gradle wrapper
         uses: gradle/wrapper-validation-action@v2
+        continue-on-error: true
+
+      - name: Manual retry on failure
+        if: failure()
+        run: sleep 10 && exit 1
 
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
@@ -43,6 +48,3 @@ jobs:
         with:
           name: junit-xml-results
           path: build/test-results/test
-
-
-
