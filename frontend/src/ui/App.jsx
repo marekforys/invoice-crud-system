@@ -120,16 +120,26 @@ export default function App() {
     const method = prompt('Payment method (e.g., CASH, CARD, BANK_TRANSFER):')
     const amount = prompt('Amount:')
     if (!method || !amount) return
+    
     try {
-      const res = await fetch(`${API}/invoices/${id}/pay`, {
+      const res = await fetch(`${API}/invoices/${id}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, amount: parseFloat(amount) })
+        body: JSON.stringify({ 
+          method: method.toUpperCase(), 
+          amount: amount,
+          date: new Date().toISOString().split('T')[0] // Current date in YYYY-MM-DD format
+        })
       })
-      if (!res.ok) throw new Error()
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to process payment')
+      }
+      
       fetchInvoices()
-    } catch {
-      setError('Failed to pay invoice')
+    } catch (err) {
+      setError(err.message || 'Failed to pay invoice')
     }
   }
 
