@@ -85,13 +85,17 @@ export default function App() {
     const priceNum = parseFloat(String(newItemPrice).replace(',', '.'))
     if (!desc) return
     if (Number.isNaN(priceNum) || !Number.isFinite(priceNum) || priceNum < 0) return
-    setNewItems(items => [...items, { description: desc, price: priceNum }])
+    setNewItems(items => [...items, { 
+      id: Date.now() + Math.random().toString(36).substr(2, 9),
+      description: desc, 
+      price: priceNum 
+    }])
     setNewItemDesc('')
     setNewItemPrice('')
   }
 
-  function removeItem(index) {
-    setNewItems(items => items.filter((_, i) => i !== index))
+  function removeItem(id) {
+    setNewItems(items => items.filter(item => item.id !== id))
   }
 
   async function createInvoice(e) {
@@ -194,10 +198,10 @@ export default function App() {
           <div style={{ marginBottom: 8 }}>
             <strong>Items:</strong>
             <ul style={{ marginTop: 6 }}>
-              {newItems.map((it, idx) => (
-                <li key={`${it.description}-${idx}`}>
+              {newItems.map((it) => (
+                <li key={it.id}>
                   {it.description} — {it.price}
-                  <button type="button" style={{ marginLeft: 8 }} onClick={() => removeItem(idx)}>Remove</button>
+                  <button type="button" style={{ marginLeft: 8 }} onClick={() => removeItem(it.id)}>Remove</button>
                 </li>
               ))}
             </ul>

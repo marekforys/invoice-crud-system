@@ -152,9 +152,7 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
             ResultSet rs = ps.executeQuery();
             List<Invoice> list = new ArrayList<>();
             while (rs.next()) {
-                Invoice inv = mapInvoiceRow(rs, true);
-                inv.getItems().addAll(loadItems(conn, inv.getId()));
-                list.add(inv);
+                list.add(mapInvoiceRow(rs, true));
             }
             return list;
         } catch (SQLException e) {
@@ -179,9 +177,7 @@ public class JdbcInvoiceRepository implements InvoiceRepository {
             try (ResultSet rs = ps.executeQuery()) {
                 List<Invoice> list = new ArrayList<>();
                 while (rs.next()) {
-                    Invoice inv = mapInvoiceRow(rs, true);
-                    inv.getItems().addAll(loadItems(conn, inv.getId()));
-                    list.add(inv);
+                    list.add(mapInvoiceRow(rs, true));
                 }
                 return list;
             }
