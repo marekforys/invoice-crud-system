@@ -244,7 +244,7 @@ export default function App() {
               <td>{inv.customerName}</td>
               <td>{inv.date}</td>
               <td>{inv.total}</td>
-              <td>{inv.paid ? `YES (${inv.amountPaid} via ${inv.paymentMethod})` : 'NO'}</td>
+              <td>{inv.amountPaid > 0 ? `${inv.amountPaid}${inv.paid ? ' (FULLY PAID)' : ' (PARTIAL PAYMENT)'}` : 'NOT PAID'}</td>
               <td>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
                   <button type="button" onClick={() => openDetails(inv)}>Details</button>
@@ -290,7 +290,7 @@ export default function App() {
             <div style={{ marginBottom: 12 }}>
               <div><strong>Customer:</strong> {detailsOpen.customerName}</div>
               <div><strong>Date:</strong> {detailsOpen.date}</div>
-              <div><strong>Paid:</strong> {detailsOpen.paid ? `YES (${detailsOpen.amountPaid} via ${detailsOpen.paymentMethod})` : 'NO'}</div>
+              <div><strong>Paid:</strong> {detailsOpen.amountPaid > 0 ? `${detailsOpen.amountPaid}${detailsOpen.paid ? ' (FULLY PAID)' : ' (PARTIAL PAYMENT)'}` : 'NOT PAID'}</div>
             </div>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
