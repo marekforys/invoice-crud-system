@@ -287,10 +287,16 @@ export default function App() {
               <h2 style={{ margin: 0 }}>Invoice {detailsOpen.id}</h2>
               <button type="button" onClick={closeDetails}>Close</button>
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <div><strong>Customer:</strong> {detailsOpen.customerName}</div>
-              <div><strong>Date:</strong> {detailsOpen.date}</div>
-              <div><strong>Paid:</strong> {detailsOpen.amountPaid > 0 ? `${detailsOpen.amountPaid}${detailsOpen.paid ? ' (FULLY PAID)' : ' (PARTIAL PAYMENT)'}` : 'NOT PAID'}</div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
+                <div><strong>Customer:</strong> {detailsOpen.customerName}</div>
+                <div><strong>Date:</strong> {detailsOpen.date}</div>
+                <div><strong>Total Amount:</strong> {detailsOpen.total}</div>
+                <div><strong>Amount Paid:</strong> {detailsOpen.amountPaid > 0 ? `${detailsOpen.amountPaid}${detailsOpen.paid ? ' (FULLY PAID)' : ' (PARTIAL PAYMENT)'}` : 'NOT PAID'}</div>
+                {detailsOpen.remainingBalance !== undefined && (
+                  <div><strong>Remaining Balance:</strong> {detailsOpen.remainingBalance}</div>
+                )}
+              </div>
             </div>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -327,9 +333,38 @@ export default function App() {
                 </tbody>
               </table>
             </div>
+            {/* Payment History Section */}
+            <div style={{ marginTop: 32, marginBottom: 24 }}>
+              <h3 style={{ margin: '24px 0 12px 0', paddingBottom: 8, borderBottom: '1px solid #eee' }}>Payment History</h3>
+              {detailsOpen.paymentHistory && detailsOpen.paymentHistory.length > 0 ? (
+                <table width="100%" cellPadding="8" style={{ borderCollapse: 'collapse', marginBottom: 16 }}>
+                  <thead>
+                    <tr style={{ background: '#f5f5f5' }}>
+                      <th align="left" style={{ padding: '8px', borderBottom: '1px solid #ddd' }}>Date</th>
+                      <th align="right" style={{ padding: '8px', borderBottom: '1px solid #ddd' }}>Amount</th>
+                      <th align="left" style={{ padding: '8px', borderBottom: '1px solid #ddd' }}>Method</th>
+                      <th align="left" style={{ padding: '8px', borderBottom: '1px solid #ddd' }}>Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailsOpen.paymentHistory.map((payment, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                        <td style={{ padding: '8px' }}>{payment.date || 'N/A'}</td>
+                        <td align="right" style={{ padding: '8px' }}>{payment.amount}</td>
+                        <td style={{ padding: '8px' }}>{payment.method || 'N/A'}</td>
+                        <td style={{ padding: '8px' }}>{payment.reference || 'N/A'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ color: '#666', padding: '16px 0', textAlign: 'center' }}>No payment history available</div>
+              )}
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-              <button type="button" onClick={closeDetails}>Cancel</button>
-              <button type="button" onClick={saveDetails}>Save</button>
+              <button type="button" onClick={closeDetails}>Close</button>
+              <button type="button" onClick={saveDetails}>Save Changes</button>
             </div>
           </div>
         </div>
